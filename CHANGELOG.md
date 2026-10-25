@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.2-dev (branch shadows-sky-fixes, not yet tested in game)
+
+* **Shadow swimming**: the radial distortion was centred on the camera, so every static
+  point moved through the warp as the player walked and shadow edges crawled continuously. The
+  map is now centred on a world anchor that re-centres only after moving Shadow Stabilisation
+  blocks (default 4) across the light; between re-centres static shadows map to the same texels.
+* **Bright line through the sun**: volumetric light treated samples outside the shadow map as
+  fully lit; the map's side planes contain the light direction, so the lit/shadowed boundary
+  showed as a line through the sun. Now faded over the map's outer edge.
+* **Cirrus streaks / glare (Halcyon sky)**: Halcyon's cirrus layer at 3.2 km, stretched 3.3x
+  along the wind, fanned into long streaks under perspective, and scattered pi times too much
+  light around the sun. The Halcyon sky now uses Belgium's 8 km band-limited cirrus, driven by
+  Cirrus Coverage and Cloud Movement Speed, with a new 22 deg ice halo (both sky sources).
+* **Moon too bright**: Halcyon's night moon disk was ~530x moonlit ground and clipped white.
+  The disk now has its physical (sunlit) radiance by day and 12x moonlit ground at night.
+* **Bloom**: anti-firefly weighting now in exposed units (it did nothing at night), and bloom
+  input is compressed around 64x white so the sun no longer floods the screen.
+* Debug views 23 (bloom contribution) and 24 (before tone mapping, magenta > 4x white).
+
 ## 0.3.1-dev (branch end-lighting-fixes, not yet tested in game)
 
 Root causes from the first End and night screenshots (Iris 1.10.8, MC 1.21.11):

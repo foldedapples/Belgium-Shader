@@ -20,7 +20,7 @@ Status values: **ported** (imported, adapted, compiles in every variant; not yet
 | Real stars (Hipparcos + Yale BSC), NASA Milky Way | `atmosphere/sky/stars.glsl`, `starCatalog.bin`, `milkyway_4k/8k.png` | ported | Sky Source = Halcyon |
 | NASA moon, phases, earthshine, solar/lunar eclipses | `atmosphere/sky/celestial.glsl`, `moon_2k/4k.png` | ported (also drives moonlight and eclipse lighting) | Sky Source |
 | Aurora | `atmosphere/sky/aurora.glsl` | ported | Sky Source |
-| Cirrus + 22° halo | `atmosphere/sky/cirrus.glsl` | ported | Sky Source |
+| Cirrus + 22° halo | `atmosphere/sky/cirrus.glsl` | replaced: its 3.2 km layer fanned into streaks in game; Belgium's 8 km layer with a new 22° halo is used, driven by Halcyon's Cirrus Coverage / Cloud Movement Speed | Sky Source |
 | Rainbows | `atmosphere/sky/rainbow.glsl` | ported | Sky Source |
 | Volumetric clouds, cloud shadows, cloud composite | `atmosphere/volumetricClouds.glsl`, `cloudComposite.glsl`, `program/dc_volumetricClouds.glsl`, `prepare5.glsl`, `cloudNoise.bin` | pending | |
 | End black hole, End ambient, End portal | `atmosphere/sky/blackHole.glsl`, `endAmbient.glsl` | pending | |

@@ -220,8 +220,19 @@ void main() {
         updateWaterSimControl();
     #endif
 
+    // Shadow map centre: follows the camera with hysteresis (distance measured across the light
+    // direction, the plane the map lies in). Re-anchors on the first frame, after a reload or
+    // dimension change (state reset), and on teleports.
+    {
+        vec3 a = fsShadowAnchor.xyz;
+        vec3 d = cameraPosition - a;
+        vec3 Ld = safeNormalize(lightDir);
+        float lateral = length(d - Ld * dot(d, Ld));
+        bool reset = init || fsShadowAnchor.w != 1.0 || lateral > max(SHADOW_ANCHOR_RADIUS, 0.0) || lateral > 64.0;
+        if (reset) fsShadowAnchor = vec4(cameraPosition, 1.0);
+    }
     mat4 view, proj;
-    buildShadowMatrices(lightDir, fsCelestialAxis.xyz, cameraPosition, view, proj);
+    buildShadowMatrices(lightDir, fsCelestialAxis.xyz, cameraPosition, fsShadowAnchor.xyz, view, proj);
     fsShadowView = view;
     fsShadowProj = proj;
     fsShadowInfo = vec4(shadowDistance, SHADOW_DEPTH_HALF, shadowCentreTexelWorld(), SHADOW_DISTORTION);

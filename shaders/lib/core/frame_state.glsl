@@ -5,7 +5,7 @@
 // so fsHeader.x != FS_VERSION means "never initialised" (first frame, pack reload, dimension
 // change) and readers must use the fallbacks below.
 
-#define FS_VERSION 0x42454C34
+#define FS_VERSION 0x42454C35
 
 #ifdef FRAME_STATE_WRITER
     #define FS_ACCESS
@@ -35,6 +35,7 @@ layout(std430, binding = 0) FS_ACCESS buffer FrameStateBuffer {
     vec4  fsFocus;             // x smoothed focus distance (blocks), y last measured distance
     mat4  fsShadowView;
     mat4  fsShadowProj;
+    vec4  fsShadowAnchor;      // xyz world position of the shadow map's centre (see buildShadowMatrices)
 };
 
 bool frameStateValid() { return fsHeader.x == FS_VERSION; }

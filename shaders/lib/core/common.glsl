@@ -33,5 +33,7 @@
 #define DBG_LIGHT_VOLUME   20
 #define DBG_GI             21
 #define DBG_LIGHTMAP       22
+#define DBG_BLOOM          23
+#define DBG_PRE_TONEMAP    24
 
 #endif

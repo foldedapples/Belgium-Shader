@@ -34,6 +34,7 @@ const float entityShadowDistanceMul = 1.0;
 #define SHADOW_FILTER 3 // [0 1 2 3 4]
 #define SHADOW_SOFTNESS 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0 3.0]
 #define SHADOW_DISTORTION 0.12 // [0.05 0.08 0.1 0.12 0.15 0.2 0.3]
+#define SHADOW_ANCHOR_RADIUS 4.0 // [0.0 2.0 4.0 6.0 8.0 12.0]
 #define COLORED_SHADOWS // Stained glass and other translucent blocks tint the light passing through them.
 
 // ---------------------------------------------------------------- Materials ---------------
@@ -251,7 +252,7 @@ const float sunPathRotation = -25.0; // [-60.0 -50.0 -40.0 -30.0 -25.0 -20.0 -10
 
 // ---------------------------------------------------------------- Debug ------------------
 //#define LOD_SHADOWS // Distant Horizons terrain casts shadow-map shadows inside the shadow distance (untested).
-#define DEBUG_VIEW 0 // [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22]
+#define DEBUG_VIEW 0 // [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24]
 
 // Iris shows a boolean #define in the menu only if some line is exactly `#ifdef NAME` or
 // `#ifndef NAME` (#if/#elif expressions do not count). These options are otherwise only

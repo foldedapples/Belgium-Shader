@@ -67,10 +67,15 @@ void main() {
         vec3 clip = sceneToShadowClip(p);
         float vis = 1.0;
         float waterAbove = 0.0;
-        if (maxOf(abs(clip.xy)) < 0.98 && abs(clip.z) < 1.0) {
+        // Outside the map the visibility is unknown. Treating it as lit made a hard lit/shadowed
+        // boundary on the map's side planes; those planes contain the light direction, so on
+        // screen it showed as a bright line through the sun (seen in game). Fade to the
+        // unshadowed value over the outer part of the map, like the surface lookup does.
+        float coverage = (1.0 - smoothstep(0.85, 0.97, maxOf(abs(clip.xy)))) * (1.0 - smoothstep(0.9, 1.0, abs(clip.z)));
+        if (coverage > 0.0) {
             vec3 tc = shadowClipToTexture(clip);
-            vis = texture(shadowtex1HW, tc);
-            if (texture(shadowcolor1, tc.xy).r > 0.5) waterAbove = max(tc.z - texture(shadowtex0, tc.xy).r, 0.0) * 2.0 * SHADOW_DEPTH_HALF;
+            vis = mix(1.0, texture(shadowtex1HW, tc), coverage);
+            if (texture(shadowcolor1, tc.xy).r > 0.5) waterAbove = max(tc.z - texture(shadowtex0, tc.xy).r, 0.0) * 2.0 * SHADOW_DEPTH_HALF * coverage;
         }
         #ifdef DIM_OVERWORLD
             vis *= cloudShadow(p);

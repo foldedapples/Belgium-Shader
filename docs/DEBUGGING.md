@@ -29,6 +29,8 @@ else keeps running, so the cost of the view itself is negligible.
 | 20 | Light volume | deferred4 | Coloured-light chroma × confidence; black = vanilla-coloured block light. |
 | 21 | Bounce light (SSGI) | deferred4 | Denoised SSGI correction before albedo (bounce added; occluded sky shows black because negatives clip); noise or ghosting here = SSGI. |
 | 22 | Lightmap | final | Block light red, sky light blue, as used by lighting. Black LOD terrain outdoors = missing sky light. |
+| 23 | Bloom contribution | final | Light bloom adds around bright sources; a large halo here = bloom, not the sky. |
+| 24 | Before tone mapping | final | Exposed scene clipped at white; magenta > 4x white. Decides whether a glow exists before or after tone mapping. |
 
 Isolating an artifact: if it is visible in 1–5 it comes from materials/resource pack; in 6–8
 from lighting; in 10–11 from clouds; 12–13 from the water simulation; 14–15 from TAA.

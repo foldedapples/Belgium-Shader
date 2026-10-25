@@ -100,7 +100,7 @@ vec3 renderSky(vec3 dir) {
         bool sunUp = fsSunDir.y > -0.12;
         vec4 ci = cirrusLayer(dir, sunUp ? fsSunDir.xyz : fsMoonDir.xyz,
                               sunUp ? fsSunIrradiance.rgb : fsMoonIrradiance.rgb, fsSkyIrradianceUp.rgb,
-                              pixelAngularSize());
+                              pixelAngularSize(), CIRRUS_AMOUNT, 1.0);
         sky = sky * ci.a + ci.rgb;
         #ifdef AURORA
             sky += auroraRadiance(dir, blueNoise(ivec2(gl_FragCoord.xy)).w) * viewTransmittance(dir) * ci.a;

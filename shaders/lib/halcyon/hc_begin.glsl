@@ -2,7 +2,6 @@
 // Names defined by both Halcyon modules and Belgium Shaders: Halcyon's copies get an hc_
 // prefix between hc_begin.glsl and hc_end.glsl.
 #define celestialAxis hc_celestialAxis
-#define dist hc_dist
 #define henyeyGreenstein hc_henyeyGreenstein
 #define lunarPenumbra hc_lunarPenumbra
 #define lunarUmbra hc_lunarUmbra

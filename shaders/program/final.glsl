@@ -52,6 +52,7 @@ vec3 displayFromHdr(vec3 hdr, float exposure, vec2 uv) {
 void main() {
     ivec2 px = ivec2(gl_FragCoord.xy);
     vec3 hdr = texelFetch(colortex0, px, 0).rgb;
+    vec3 sceneHdr = hdr;
     #ifdef BLOOM
         // Energy-conserving: bloom redistributes light instead of adding it.
         hdr = mix(hdr, bloomAt(texCoord), BLOOM_STRENGTH);
@@ -105,6 +106,15 @@ void main() {
             // Lightmap as lit by deferred: block light red, sky light blue (after LOD fixes).
             vec2 lm = texelFetch(colortex4, px, 0).rg;
             srgb = vec3(lm.x, 0.0, lm.y);
+        } else if (view == DBG_BLOOM) {
+            // What bloom adds (it also removes BLOOM_STRENGTH of the scene, energy-conserving).
+            srgb = linearToSrgb(tonemapFilmic(bloomAt(texCoord) * BLOOM_STRENGTH * exposure));
+        } else if (view == DBG_PRE_TONEMAP) {
+            // Exposed scene before bloom and tone curve, clipped at 1; magenta marks > 4x white,
+            // i.e. light the tone curve has to compress hard (sun, lamps, overexposure).
+            vec3 x = sceneHdr * exposure;
+            srgb = linearToSrgb(min(x, vec3(1.0)));
+            if (luminance(x) > 4.0) srgb = mix(srgb, vec3(1.0, 0.0, 1.0), 0.6);
         } else if (view == DBG_EXPOSURE) {
             // Scene luminance relative to the metered average, in stops: blue -4 .. red +4.
             float stops = log2(max(luminance(hdr), 1e-7) / max(fsExposure.y, 1e-7));

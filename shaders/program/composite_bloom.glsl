@@ -5,6 +5,7 @@
 // Reads and writes of one dispatch touch different levels except each thread's own texel, and
 // Iris places a barrier between dispatches, so no pass sees partial results.
 #include "/lib/core/common.glsl"
+#include "/lib/core/frame_state.glsl"
 #include "/lib/post/bloom_layout.glsl"
 
 #ifdef STAGE_COMPUTE
@@ -25,10 +26,13 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 uniform sampler2D colortex0;
 layout(rgba16f) uniform image2D bloomAtlas;
 
-// Karis-style weighting against single bright pixels (fireflies) on the first downsample.
+// Karis-style weighting against single bright pixels (fireflies) on the first downsample,
+// in displayed (exposed) units. On raw radiance it did nothing at night (everything ~1e-4), so
+// the moon and lamps bloomed at full strength while the sun was suppressed by day.
 vec3 fireflySafeAverage(vec3 a, vec3 b, vec3 c, vec3 d) {
-    float wa = 1.0 / (1.0 + luminance(a)), wb = 1.0 / (1.0 + luminance(b));
-    float wc = 1.0 / (1.0 + luminance(c)), wd = 1.0 / (1.0 + luminance(d));
+    float e = frameStateValid() && fsExposure.x > 0.0 ? fsExposure.x : 1.0;
+    float wa = 1.0 / (1.0 + luminance(a) * e), wb = 1.0 / (1.0 + luminance(b) * e);
+    float wc = 1.0 / (1.0 + luminance(c) * e), wd = 1.0 / (1.0 + luminance(d) * e);
     return (a * wa + b * wb + c * wc + d * wd) / (wa + wb + wc + wd);
 }
 
@@ -52,6 +56,16 @@ void main() {
         vec3 c = sanitizeRadiance(textureLod(colortex0, uv + vec2(-o.x,  o.y), 0.0).rgb);
         vec3 d = sanitizeRadiance(textureLod(colortex0, uv + vec2( o.x,  o.y), 0.0).rgb);
         vec3 result = fireflySafeAverage(a, b, c, d);
+        // Highlight compression of the bloom input around 64x white (exposed): lamps and
+        // emissives (2-20x white) bloom almost unchanged, while the sun disk (hundreds of times white)
+        // no longer floods a large part of the screen with its glow. The image itself keeps the
+        // full radiance; only what bloom spreads is limited.
+        {
+            float e = frameStateValid() && fsExposure.x > 0.0 ? fsExposure.x : 1.0;
+            float l = luminance(result) * e;
+            const float CAP = 64.0;
+            if (l > 1e-6) result *= inversesqrt(1.0 + sq(l / CAP));   // -5 % at 20x, ~64x for the sun
+        }
     #elif BLOOM_PASS <= 4
         const int src = BLOOM_PASS;
         vec2 o = texel * 0.5;

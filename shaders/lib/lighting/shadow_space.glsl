@@ -43,8 +43,13 @@ vec3 shadowClipToTexture(vec3 clip) {
     return vec3(distortShadowXY(clip.xy), clip.z) * 0.5 + 0.5;
 }
 
-// Builds the light view and projection. `cam` is the camera's world position.
-void buildShadowMatrices(vec3 lightDir, vec3 axis, vec3 cam, out mat4 view, out mat4 proj) {
+// Builds the light view and projection. `cam` is the camera's world position, `anchor` the
+// world position the map is centred on (begin.csh keeps it within SHADOW_ANCHOR_RADIUS of the
+// camera). The radial distortion is centred on the anchor, so between re-anchorings every static
+// point keeps the same distorted texel and its shadow does not move. Centring the distortion on
+// the camera itself (as before) moved every point through the warp as the player walked, so
+// shadow edges crawled continuously (up to a texel per frame; ~10 cm at 40 m on HIGH).
+void buildShadowMatrices(vec3 lightDir, vec3 axis, vec3 cam, vec3 anchor, out mat4 view, out mat4 proj) {
     vec3 L = safeNormalize(lightDir);
     vec3 right = cross(axis, L);
     if (dot(right, right) < 1e-6) right = cross(vec3(0.0, 0.0, 1.0), L);
@@ -52,11 +57,13 @@ void buildShadowMatrices(vec3 lightDir, vec3 axis, vec3 cam, out mat4 view, out 
     right = normalize(right);
     vec3 up = cross(L, right);
 
-    // Anchor the texel grid to the world: translation = R*cam - snap(R*cam).
+    // Anchor the texel grid to the world: translation = R*cam - snap(R*anchor). Depth stays
+    // centred on the camera (the +-512 block range is not distorted).
     float texel = shadowCentreTexelWorld();
-    vec3 camL = vec3(dot(right, cam), dot(up, cam), dot(L, cam));
-    vec2 snapped = floor(camL.xy / texel) * texel;
-    vec3 t = vec3(camL.xy - snapped, 0.0);
+    vec2 camL = vec2(dot(right, cam), dot(up, cam));
+    vec2 anchorL = vec2(dot(right, anchor), dot(up, anchor));
+    vec2 snapped = floor(anchorL / texel) * texel;
+    vec3 t = vec3(camL - snapped, 0.0);
 
     view = mat4(vec4(right.x, up.x, L.x, 0.0),
                 vec4(right.y, up.y, L.y, 0.0),
