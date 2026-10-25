@@ -3,6 +3,7 @@
 // prefix between hc_begin.glsl and hc_end.glsl.
 #define celestialAxis hc_celestialAxis
 #define henyeyGreenstein hc_henyeyGreenstein
+#define k hc_k
 #define lunarPenumbra hc_lunarPenumbra
 #define lunarUmbra hc_lunarUmbra
 #define moonDiskRadiance hc_moonDiskRadiance
@@ -12,3 +13,5 @@
 #define solarLimbDarkening hc_solarLimbDarkening
 #define sunDiskRadiance hc_sunDiskRadiance
 #define surfaceWetness hc_surfaceWetness
+#define type hc_type
+#define waveTime hc_waveTime

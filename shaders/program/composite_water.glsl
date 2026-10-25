@@ -22,6 +22,9 @@
 #include "/lib/water/water_sim_common.glsl"
 #if DEBUG_VIEW == DBG_WATER_HEIGHT || DEBUG_VIEW == DBG_WATER_VELOCITY
     #include "/lib/water/water_sim_sample.glsl"
+    #if WATER_SOURCE == 1 && defined DIM_OVERWORLD
+        #include "/lib/halcyon/halcyon_water_sim.glsl"
+    #endif
 #endif
 #include "/lib/reflections/ssr.glsl"
 #include "/lib/compat/lod.glsl"
@@ -69,12 +72,16 @@ uniform sampler2D depthtex1;
 in vec2 texCoord;
 
 #if DEBUG_VIEW == DBG_REFLECTIONS || DEBUG_VIEW == DBG_WATER_HEIGHT || DEBUG_VIEW == DBG_WATER_VELOCITY
-/* RENDERTARGETS: 0,11 */
-layout(location = 1) out vec4 outDebug;
+/* RENDERTARGETS: 0,15,11 */
+layout(location = 1) out vec4 outReflHistory;
+layout(location = 2) out vec4 outDebug;
 #else
-/* RENDERTARGETS: 0 */
+/* RENDERTARGETS: 0,15 */
+layout(location = 1) out vec4 outReflHistory;
 vec4 outDebug;
 #endif
+// colortex15: last frame's reflections (rgb) and the reflecting surface's distance (a).
+uniform sampler2D colortex15;
 layout(location = 0) out vec4 outScene;
 
 vec3 environment(vec3 dir) {
@@ -140,13 +147,50 @@ vec3 removeAtmosphere(vec3 c, vec2 uv, vec3 scenePos, float dist) {
     return max((c - S) / max(T, vec3(0.05)), vec3(0.0));
 }
 
-vec3 reflectionAt(vec3 viewPos, vec3 viewDirReflected, vec3 sceneDirReflected, float skyLight, float jitter, out float hitConfidence) {
+// Temporal reflection filter (after Stachowiak 2015, stochastic SSR): reflections are
+// reprojected through the *virtual* reflected point - surface + direction x hit distance -
+// so they move with their own parallax instead of the surface's (reprojecting with the
+// surface smears reflections of distant things). History is rejected when the reprojected
+// surface distance disagrees (disocclusion) or leaves the screen, clamped to a band around the
+// current value against ghosting, and weighted by roughness: mirror reflections are nearly
+// noise-free and stay sharp; rough ones, one GGX-sampled ray per pixel and frame, are averaged.
+vec4 reflHistoryOut = vec4(0.0);
+vec3 temporalReflection(vec3 current, vec3 surfaceScene, vec3 sceneDirReflected, float hitDist, float roughness) {
+    float surfDist = length(surfaceScene);
+    reflHistoryOut = vec4(current, surfDist);
+    #ifdef REFLECTION_TEMPORAL
+    if (!frameStateValid() || fsHeader.y < 3) return current;
+    vec3 virtualPoint = surfaceScene + sceneDirReflected * hitDist;
+    vec2 prevUv = reprojectScene(virtualPoint).xy;
+    vec2 prevSurf = reprojectScene(surfaceScene).xy;
+    if (any(lessThan(min(prevUv, prevSurf), vec2(0.0))) || any(greaterThan(max(prevUv, prevSurf), vec2(1.0)))) return current;
+    float expected = length(surfaceScene + (cameraPosition - previousCameraPosition));
+    float stored = texture(colortex15, prevSurf).a;
+    if (abs(stored - expected) > max(expected * 0.05, 0.1)) return current;
+    vec3 h = texture(colortex15, prevUv).rgb;
+    if (!isFiniteVec(h)) return current;
+    h = clamp(h, current * 0.5 - 0.01, current * 2.0 + 0.01);
+    float keep = mix(0.25, 0.85, saturate(roughness * 8.0)) * REFLECTION_TEMPORAL_WEIGHT;
+    vec3 resolved = mix(current, h, keep);
+    reflHistoryOut = vec4(resolved, surfDist);
+    return resolved;
+    #else
+    return current;
+    #endif
+}
+
+vec3 reflectionAt(vec3 viewPos, vec3 viewDirReflected, vec3 sceneDirReflected, float skyLight, float jitter, float roughness, out float hitConfidence) {
     vec3 env = environmentFallback(sceneDirReflected, skyLight);
     SsrResult s = traceScreenSpace(viewPos, viewDirReflected, depthtex1, SSR_STEPS, jitter);
     hitConfidence = s.hit ? s.confidence : 0.0;
-    if (!s.hit) return env;
-    vec3 hitColor = texture(colortex0, s.uv).rgb;
-    return mix(env, hitColor, s.confidence);
+    vec3 result = env;
+    float hitDist = 512.0;                        // misses: a distant virtual point
+    if (s.hit) {
+        result = mix(env, texture(colortex0, s.uv).rgb, s.confidence);
+        vec3 hitView = screenToView(s.uv, texture(depthtex1, s.uv).r);
+        hitDist = mix(512.0, distance(hitView, viewPos), s.confidence);
+    }
+    return temporalReflection(result, viewToScene(viewPos), sceneDirReflected, hitDist, roughness);
 }
 
 void main() {
@@ -161,6 +205,7 @@ void main() {
     unpackWaterLight(waterData.b, waterLm, lodWaves);
     vec4 noise = blueNoise(px);
     outDebug = vec4(0.0);
+    outReflHistory = vec4(0.0, 0.0, 0.0, 0.0);
 
     // LOD surfaces (water and terrain) live in their own depth buffers.
     ScenePoint p0 = scenePoint(texCoord, d0, px, false);
@@ -274,7 +319,8 @@ void main() {
         // Reflection.
         vec3 r = reflect(-v, n);
         float conf;
-        vec3 reflection = reflectionAt(view0, normalize(sceneToViewDir(r)), r, skyLight, noise.y, conf);
+        vec3 reflection = reflectionAt(view0, normalize(sceneToViewDir(r)), r, skyLight, noise.y, 0.0025 + 0.02 * fsWeather.z, conf);
+        outReflHistory = reflHistoryOut;
         float F = min(fresnelDielectric(saturate(dot(n, v)), WATER_IOR) * WATER_REFLECTIVITY * CP_REFLECTION, 1.0);
 
         // Sun/moon glint: very smooth GGX on the wave normal.
@@ -301,9 +347,15 @@ void main() {
         #if DEBUG_VIEW == DBG_REFLECTIONS
             outDebug = vec4(conf, F, 0.0, 1.0);
         #elif DEBUG_VIEW == DBG_WATER_HEIGHT || DEBUG_VIEW == DBG_WATER_VELOCITY
-            SimSurface sim = sampleWaterSim(scene0);
-            float value = DEBUG_VIEW == DBG_WATER_HEIGHT ? sim.height * 10.0 : sim.velocity * 0.5;
-            outDebug = vec4(max(value, 0.0), sim.weight * 0.15, max(-value, 0.0), 1.0);
+            #if WATER_SOURCE == 1 && defined DIM_OVERWORLD
+                // Halcyon's simulation: height only (velocity view shows the slope magnitude).
+                float value = DEBUG_VIEW == DBG_WATER_HEIGHT ? halcyonWaterSimHeight(scene0) * 10.0 : length(halcyonWaterSimSlope(scene0));
+                outDebug = vec4(max(value, 0.0), 0.0, max(-value, 0.0), 1.0);
+            #else
+                SimSurface sim = sampleWaterSim(scene0);
+                float value = DEBUG_VIEW == DBG_WATER_HEIGHT ? sim.height * 10.0 : sim.velocity * 0.5;
+                outDebug = vec4(max(value, 0.0), sim.weight * 0.15, max(-value, 0.0), 1.0);
+            #endif
         #endif
     }
 
@@ -340,7 +392,8 @@ void main() {
             vec3 r = reflect(-v, h);
             if (dot(r, g.geoNormal) < 0.0) r = reflect(r, g.geoNormal);
             float conf;
-            vec3 refl = reflectionAt(view1, normalize(sceneToViewDir(r)), r, g.lightmap.y, noise.y, conf);
+            vec3 refl = reflectionAt(view1, normalize(sceneToViewDir(r)), r, g.lightmap.y, noise.y, m.roughness, conf);
+            outReflHistory = reflHistoryOut;
             float horizon = saturate(1.0 + 1.2 * dot(r, g.geoNormal));
             // The deferred colour already carries the atmosphere and clouds in front of the
             // surface; the added reflection must be attenuated by the same transmittance.

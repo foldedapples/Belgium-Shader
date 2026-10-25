@@ -18,6 +18,7 @@ const int colortex11Format = RGBA16F;
 const int colortex12Format = RGBA16F;
 const int colortex13Format = RGBA16F;
 const int colortex14Format = R11F_G11F_B10F;
+const int colortex15Format = RGBA16F;
 
 const bool colortex0Clear = false;
 const vec4 colortex1ClearColor = vec4(0.0, 0.0, 0.0, 0.0);
@@ -34,6 +35,7 @@ const vec4 colortex11ClearColor = vec4(0.0, 0.0, 0.0, 0.0);
 const vec4 colortex12ClearColor = vec4(0.0, 0.0, 0.0, 0.0);
 const bool colortex13Clear = false;
 const bool colortex14Clear = false;
+const bool colortex15Clear = false;
 
 const vec4 shadowcolor0ClearColor = vec4(1.0, 1.0, 1.0, 1.0);
 const vec4 shadowcolor1ClearColor = vec4(0.0, 0.0, 0.0, 0.0);

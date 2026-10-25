@@ -16,6 +16,9 @@
 #if defined DIM_OVERWORLD && SKY_SOURCE == 1
     #include "/lib/halcyon/halcyon_sky.glsl"
 #endif
+#if defined DIM_OVERWORLD && CLOUD_SOURCE == 1
+    #include "/lib/halcyon/halcyon_clouds.glsl"
+#endif
 #if !defined DIM_NETHER
     #define WATER_SIM_WRITER
     #include "/lib/water/water_sim_control.glsl"
@@ -164,6 +167,14 @@ void main() {
         fsCloud.y = fresh ? thunderStrength : fsCloud.y + (thunderStrength - fsCloud.y) * k;
         fsCloud.z = CLOUD_ALTITUDE;
         fsCloud.w = CLOUD_ALTITUDE + 1900.0 + 5000.0 * fsCloud.y;
+        #if defined DIM_OVERWORLD && CLOUD_SOURCE == 1
+            // Halcyon's layer and coverage, so the cloud shadow plane, the temporal pass and the
+            // overcast lighting below follow the clouds that are drawn.
+            vec2 hcLayer = halcyonCloudLayer();
+            fsCloud.z = hcLayer.x;
+            fsCloud.w = hcLayer.y;
+            fsCloud.x = halcyonCloudCoverage();
+        #endif
         float a = radians(WATER_WIND_ANGLE);
         vec2 wind = vec2(cos(a), sin(a)) * CLOUD_WIND_SPEED * (1.0 + fsCloud.y);
         vec4 off = fresh ? vec4(0.0) : fsCloudWind;

@@ -8,3 +8,15 @@
 #undef sunIrradiance
 #undef worldTimeCounter
 #undef biomeCanRainSmooth
+#undef skyMultiplier
+#undef CLOUD_EXTINCTION_COLOR
+#undef weatherSunlightColor
+#undef sunVisibilitySmooth
+#undef biomeCanPrecipitateSmooth
+#undef oceanBiomeSmooth
+#undef riverBiomeSmooth
+#undef WATER_INSCATTER_GAIN
+#undef WAVE_DETAIL
+#undef SHADOWS
+#undef CLOUDS
+#undef getCloudShadow

@@ -42,12 +42,20 @@ MANIFEST = [
     ("begin_d",   "c", "water_sim_step", ["SIM_STEP_INDEX 2"], ("world0",)),
     ("begin_e",   "c", "water_sim_step", ["SIM_STEP_INDEX 3"], ("world0",)),
     ("begin_a",   "c", "water_sim_step", ["SIM_STEP_INDEX 0"], ("world1",)),
+    # Halcyon's water simulation (Water Source = Halcyon), Overworld: control pass, then up to
+    # three fixed steps; the prepare chain is prepare (cloud shadow), prepare_a, prepare_b ...
+    ("prepare_a", "c", "halcyon/waterSim", ["csh", "WORLD_OVERWORLD", "WATER_SIM_CONTROL"], ("world0",)),
+    ("prepare_b", "c", "halcyon/waterSim", ["csh", "WORLD_OVERWORLD", "WATER_SIM_STEP 0"], ("world0",)),
+    ("prepare_c", "c", "halcyon/waterSim", ["csh", "WORLD_OVERWORLD", "WATER_SIM_STEP 1"], ("world0",)),
+    ("prepare_d", "c", "halcyon/waterSim", ["csh", "WORLD_OVERWORLD", "WATER_SIM_STEP 2"], ("world0",)),
     ("begin_b",   "c", "water_sim_step", ["SIM_STEP_INDEX 1"], ("world1",)),
     ("begin_c",   "c", "water_sim_step", ["SIM_STEP_INDEX 2"], ("world1",)),
     ("begin_d",   "c", "water_sim_step", ["SIM_STEP_INDEX 3"], ("world1",)),
     # ---- shadow --------------------------------------------------------------------------
     ("shadow",    "vf", "shadow", [], ALL),
-    ("shadowcomp", "c", "shadowcomp_floodfill", [], ALL),
+    ("shadowcomp", "c", "shadowcomp_floodfill", ["LV_STEP 0"], ALL),
+    ("shadowcomp_a", "c", "shadowcomp_floodfill", ["LV_STEP 1"], ALL),
+    ("shadowcomp_b", "c", "shadowcomp_floodfill", ["LV_STEP 2"], ALL),
     ("prepare",   "c", "prepare_cloud_shadow", [], ("world0",)),
     # ---- gbuffers: opaque ------------------------------------------------------------------
     ("gbuffers_terrain",      "vf", "gbuffers_solid", ["PROG_TERRAIN"], ALL),

@@ -4,13 +4,13 @@
 #include "/lib/core/common.glsl"
 #include "/lib/water/water_sim_common.glsl"
 
-uniform sampler2D waterSimATex;
-uniform sampler2D waterSimBTex;
+uniform sampler2D beWaterSimATex;
+uniform sampler2D beWaterSimBTex;
 
 vec4 simFetch(ivec2 cell, int parity) {
     if (!simInWindow(cell, wsWindow.xy)) return vec4(0.0);
     ivec2 t = simTexel(cell);
-    return parity == 0 ? texelFetch(waterSimATex, t, 0) : texelFetch(waterSimBTex, t, 0);
+    return parity == 0 ? texelFetch(beWaterSimATex, t, 0) : texelFetch(beWaterSimBTex, t, 0);
 }
 
 struct SimSurface {

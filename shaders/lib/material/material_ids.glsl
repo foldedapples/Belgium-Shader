@@ -42,7 +42,7 @@
 #define MAT_LOD             42
 #define MAT_PARTICLE        43
 
-#define ENTITY_BOAT      20001
+#define ENTITY_BOAT      2       // shared with Halcyon's water sim (WS_BOAT_ENTITY_ID)
 #define ENTITY_PLAYER    20002
 #define ENTITY_LIGHTNING 20003
 

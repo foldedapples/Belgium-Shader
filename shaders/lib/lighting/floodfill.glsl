@@ -49,6 +49,25 @@ vec3 sampleLightVolume(vec3 uvw) {
     return (frameCounter & 1) == 0 ? texture(lightVolBTex, uvw).rgb : texture(lightVolATex, uvw).rgb;
 }
 
+// Light-volume gradient toward the dominant nearby source (xyz) and a confidence (w), for any
+// use (blockLightDirection below is the specular variant behind its own option).
+vec4 blockLightDirectionAny(vec3 scenePos, vec3 normal) {
+    #ifdef COLORED_LIGHTING
+        vec3 uvw = lightVolumeUvw(scenePos + normal * 0.55);
+        if (any(lessThan(uvw, vec3(0.03))) || any(greaterThan(uvw, vec3(0.97)))) return vec4(0.0);
+        vec3 e = 1.0 / vec3(LV_SIZE);
+        vec3 g = vec3(luminance(sampleLightVolume(uvw + vec3(e.x, 0.0, 0.0))) - luminance(sampleLightVolume(uvw - vec3(e.x, 0.0, 0.0))),
+                      luminance(sampleLightVolume(uvw + vec3(0.0, e.y, 0.0))) - luminance(sampleLightVolume(uvw - vec3(0.0, e.y, 0.0))),
+                      luminance(sampleLightVolume(uvw + vec3(0.0, 0.0, e.z))) - luminance(sampleLightVolume(uvw - vec3(0.0, 0.0, e.z))));
+        float lum = luminance(sampleLightVolume(uvw));
+        float len = length(g);
+        if (len <= 1e-6 || lum <= 1e-6) return vec4(0.0);
+        return vec4(g / len, smoothstep(0.05, 0.4, len / lum));
+    #else
+        return vec4(0.0);
+    #endif
+}
+
 // Direction toward the dominant nearby light source (xyz) and a confidence (w): the gradient
 // of the diffused light points up-hill toward emitters. Used to give block light a specular
 // highlight on smooth, metallic and wet surfaces.

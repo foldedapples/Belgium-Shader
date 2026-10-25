@@ -81,7 +81,7 @@ const float sunPathRotation = -25.0; // [-60.0 -50.0 -40.0 -30.0 -25.0 -20.0 -10
 
 // ---------------------------------------------------------------- Clouds ------------------
 #define VOLUMETRIC_CLOUDS // Raymarched 3-D clouds you can fly through.
-#define CLOUD_QUALITY 2 // [0 1 2 3 4]
+#define CLOUD_QUALITY 2 // [0 1 2 3 4 5]
 #define CLOUD_RES 0.5 // [0.25 0.5 0.75 1.0]
 #define CLOUD_COVERAGE 0.45 // [0.1 0.2 0.3 0.4 0.45 0.5 0.6 0.7 0.8 0.9]
 #define CLOUD_DAILY_VARIATION 0.35 // [0.0 0.15 0.25 0.35 0.5]
@@ -143,7 +143,56 @@ const float sunPathRotation = -25.0; // [-60.0 -50.0 -40.0 -30.0 -25.0 -20.0 -10
 #define SKY_SOURCE 1 // [0 1]
 // Rain Ripple Source: 1 = Halcyon's ripples (lib/halcyon/water/rainRipples.glsl), 0 = Belgium's.
 #define RAIN_RIPPLE_SOURCE 1 // [0 1]
+// Cloud Source: 1 = Halcyon's volumetric clouds (lib/halcyon), 0 = Belgium's (lib/clouds).
+#define CLOUD_SOURCE 1 // [0 1]
+// Water Source: 1 = Halcyon's water simulation, swells, caustics and underwater shafts
+// (Overworld; the End keeps Belgium's simulation), 0 = Belgium's.
+#define WATER_SOURCE 1 // [0 1]
+#define WATER_SIM_QUALITY 2 // [1 2 3 4]
+#define CAUSTICS
+#define CAUSTICS_MODE 2 // [1 2]
+#define CAUSTICS_STRENGTH 1.0 // [0.25 0.5 0.75 1.0 1.25 1.5]
+#define UW_SUN_SHAFTS
+#define UW_SHAFT_SAMPLES 8 // [4 6 8 12 16]
+#define UW_SHAFT_STRENGTH 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0]
+#define UNDERWATER_FOG 1.0 // [0.25 0.5 0.75 1.0 1.25 1.5 2.0 3.0]
+#define WAVE_SCALE 1.0 // [0.5 0.75 1.0 1.25 1.5 2.0]
+#define WAVE_SPEED 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 2.0]
+#define WAVE_DEPTH 0.3 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
+#define WAVE_SWELL 1.0 // [0.0 0.25 0.5 0.75 1.0 1.5 2.0]
+#define WATER_SWELLS
+#define WATER_STORM_WAVES 1.0 // [0.0 0.5 1.0 1.5 2.0]
+#define WATER_BIOME_WAVES
+#define VC_ALTITUDE 640.0 // [400.0 500.0 640.0 800.0 1000.0 1200.0]
+#define VC_STEPS 32 // [16 24 32 48 64 96]
+#define VC_LIGHT_STEPS 5 // [3 4 5 6 8]
+#define CLOUD_SHADOW_VISIBILITY 0.8 // [0.0 0.2 0.4 0.6 0.7 0.8 0.9 1.0]
+// Halcyon's cloud quality levels (Cloud Quality 5 = custom: Cloud Steps / Light Steps).
+#if CLOUD_QUALITY == 0
+  #define VC_STEPS_Q 16
+  #define VC_LIGHT_STEPS_Q 3
+#elif CLOUD_QUALITY == 1
+  #define VC_STEPS_Q 24
+  #define VC_LIGHT_STEPS_Q 4
+#elif CLOUD_QUALITY == 2
+  #define VC_STEPS_Q 32
+  #define VC_LIGHT_STEPS_Q 5
+#elif CLOUD_QUALITY == 3
+  #define VC_STEPS_Q 48
+  #define VC_LIGHT_STEPS_Q 6
+#elif CLOUD_QUALITY == 4
+  #define VC_STEPS_Q 48
+  #define VC_LIGHT_STEPS_Q 8
+#else
+  #define VC_STEPS_Q VC_STEPS
+  #define VC_LIGHT_STEPS_Q VC_LIGHT_STEPS
+#endif
 #define RAIN_RIPPLE_STRENGTH 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0]
+#define RAIN_OPACITY 0.3 // [0.1 0.2 0.3 0.4 0.5 0.7]
+#define REFLECTION_TEMPORAL // Accumulate reflections over frames (less noise on rough and wet surfaces).
+#define REFLECTION_TEMPORAL_WEIGHT 1.0 // [0.5 0.75 1.0]
+#define BLOCK_LIGHT_DIRECTIONAL // Block light is brighter on faces turned toward torches and lamps (needs Coloured Lighting).
+#define RAIN_WIND_TILT 0.12 // [0.0 0.06 0.12 0.2 0.3]
 // Options below are Halcyon's, copied from its settings.glsl. AURORA, AURORA_BRIGHTNESS,
 // MOON_BRIGHTNESS, RAINBOW_BRIGHTNESS and STAR_TWINKLE are shared with Belgium's sky.
 // Belgium's options that used these names for something else are now BE_*.
@@ -179,6 +228,10 @@ const float sunPathRotation = -25.0; // [-60.0 -50.0 -40.0 -30.0 -25.0 -20.0 -10
 // Plain #ifdef references so Iris lists these toggles (see the note at the end of the file).
 #ifdef END_PLANETS
 #endif
+#ifdef UW_SUN_SHAFTS
+#endif
+#ifdef BLOCK_LIGHT_DIRECTIONAL
+#endif
 #ifdef END_BH_DRIFT
 #endif
 
@@ -207,9 +260,9 @@ const float sunPathRotation = -25.0; // [-60.0 -50.0 -40.0 -30.0 -25.0 -20.0 -10
 #define WATER_SIM_RES 512 // [256 512 1024 2048]
 #define WATER_SIM_CPB 8 // [4 6 8 10 12 16]
 #define WATER_SIM_WAVE_SPEED 1.4 // [0.8 1.0 1.4 2.0 2.8]
-#define WATER_SIM_STRENGTH 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0]
-#define PLAYER_RIPPLE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-#define BOAT_WAKE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+#define WATER_SIM_STRENGTH 1.0 // [0.25 0.5 0.75 1.0 1.25 1.5 2.0]
+#define PLAYER_RIPPLE_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0 1.5 2.0]
+#define BOAT_WAKE_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0 1.5 2.0]
 
 // ---------------------------------------------------------------- Camera ------------------
 #define AUTO_EXPOSURE // Adapt exposure to scene brightness like an eye or camera.

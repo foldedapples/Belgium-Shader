@@ -22,6 +22,9 @@
 #ifndef DIM_NETHER
     #include "/lib/lighting/shadows.glsl"
     #include "/lib/water/caustics.glsl"
+    #if WATER_SOURCE == 1 && defined DIM_OVERWORLD
+        #include "/lib/halcyon/halcyon_water_light.glsl"
+    #endif
 #endif
 #ifdef DIM_OVERWORLD
     #include "/lib/sky/sky_render.glsl"
@@ -184,8 +187,12 @@ void main() {
             // Lit through water: Beer-Lambert along the light path and caustics.
             vec3 worldPos = cameraPosition + scenePos;
             float footprint = dist * pixelAngularSize();
-            direct *= exp(-waterExtinction() * sh.waterDepth)
-                    * causticFactor(worldPos, l, sh.waterDepth, waterOpenness(1.0), footprint);
+            #if WATER_SOURCE == 1 && defined DIM_OVERWORLD
+                direct *= exp(-waterExtinction() * sh.waterDepth) * halcyonCaustics(worldPos, l, sh.waterDepth, dist);
+            #else
+                direct *= exp(-waterExtinction() * sh.waterDepth)
+                        * causticFactor(worldPos, l, sh.waterDepth, waterOpenness(1.0), footprint);
+            #endif
         }
 
         #ifdef SUBSURFACE_SCATTERING
@@ -214,6 +221,16 @@ void main() {
     vec3 blockE = blockLightIrradiance(g.lightmap.x);
     vec4 chroma = blockLightChroma(scenePos, g.geoNormal);
     blockE = mix(blockE, luminance(blockE) * chroma.rgb, chroma.a);
+    #if defined COLORED_LIGHTING && defined BLOCK_LIGHT_DIRECTIONAL
+    {
+        // Vanilla block light has no direction, so torch-lit rooms look flat. The light
+        // volume's gradient points toward the emitters: faces turned toward them get up to
+        // +60 %, faces turned away down to -60 %, zero on average over orientations, so
+        // brightness overall is unchanged. Confidence fades it out where no clear source is.
+        vec4 bdir = blockLightDirectionAny(scenePos, g.geoNormal);
+        blockE *= max(1.0 + 0.6 * bdir.w * dot(n, bdir.xyz), 0.35);
+    }
+    #endif
     vec3 toHand;
     vec3 handE = handLightIrradiance(scenePos, n, toHand);
     vec3 localE = blockE + handE + ambientFloor() + lightningIrradiance(scenePos, n, g.lightmap.y);

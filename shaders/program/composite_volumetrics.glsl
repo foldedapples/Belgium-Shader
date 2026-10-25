@@ -29,6 +29,12 @@
 #ifdef DIM_END
     #include "/lib/end/end_params.glsl"
 #endif
+#if WATER_SOURCE == 1 && defined DIM_OVERWORLD && defined UW_SUN_SHAFTS
+    #include "/lib/water/water_sim_common.glsl"
+    #define HALCYON_HAS_WATER_PLANE
+    #define HALCYON_UW_SHAFTS
+    #include "/lib/halcyon/halcyon_water_light.glsl"
+#endif
 
 uniform sampler2D depthtex0;
 
@@ -49,6 +55,15 @@ void main() {
     float maxDist = underwater ? VL_WATER_DISTANCE : VL_DISTANCE;
     float dist = depth >= 1.0 ? maxDist : min(length(viewPos), maxDist);
 
+    #if WATER_SOURCE == 1 && defined DIM_OVERWORLD && defined UW_SUN_SHAFTS
+    if (underwater) {
+        // Halcyon's underwater sun shafts: refracted sunlight through Belgium's water medium,
+        // shadowed by the shadow map and focused by Halcyon's caustics (Caustics Mode 2).
+        float j = blueNoise(ivec2(gl_FragCoord.xy)).z;
+        outVolumetric = vec4(sanitizeRadiance(halcyonUnderwaterShafts(viewPos, j)), 1.0);
+        return;
+    }
+    #endif
     const int STEPS = VL_STEPS;
     float dt = dist / float(STEPS);
     float jitter = blueNoise(ivec2(gl_FragCoord.xy)).z;

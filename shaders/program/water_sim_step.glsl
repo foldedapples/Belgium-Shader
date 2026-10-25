@@ -23,8 +23,8 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
     const ivec3 workGroups = ivec3(32, 32, 1);
 #endif
 
-layout(rgba16f) uniform image2D waterSimA;
-layout(rgba16f) uniform image2D waterSimB;
+layout(rgba16f) uniform image2D beWaterSimA;
+layout(rgba16f) uniform image2D beWaterSimB;
 
 int readParity;
 bool firstStep;
@@ -38,7 +38,7 @@ vec2 loadCell(ivec2 cell) {
     if (clearAll || !simInWindow(cell, centre)) return vec2(0.0);
     if (firstStep && !simInWindow(cell, prevCentre)) return vec2(0.0);
     ivec2 t = simTexel(cell);
-    return readParity == 0 ? imageLoad(waterSimA, t).xy : imageLoad(waterSimB, t).xy;
+    return readParity == 0 ? imageLoad(beWaterSimA, t).xy : imageLoad(beWaterSimB, t).xy;
 }
 
 float gaussian(vec2 d, float radius) {
@@ -157,7 +157,7 @@ void main() {
     vec2 grad = vec2(e.x - w.x, n.x - s.x) * (0.5 / SIM_DX);
 
     vec4 outTexel = vec4(hNext, hStored, grad);
-    if (readParity == 0) imageStore(waterSimB, t, outTexel);
-    else imageStore(waterSimA, t, outTexel);
+    if (readParity == 0) imageStore(beWaterSimB, t, outTexel);
+    else imageStore(beWaterSimA, t, outTexel);
 }
 #endif

@@ -17,3 +17,23 @@
 // World time in seconds (20 ticks per second).
 #define worldTimeCounter (float(worldTime) / 20.0 + float(worldDay) * 1200.0)
 #define biomeCanRainSmooth biomePrecipSmooth
+// Glimmer's cave darkening of the sky; Belgium darkens caves through sky light instead.
+#define skyMultiplier 1.0
+#define CLOUD_EXTINCTION_COLOR vec3(1.0)
+// Water: Belgium's cloud shadows already carry weather and the shafts are shadowed per step, so
+// Glimmer's rain-dimmed sunlight and camera sun visibility are the plain light here.
+#define weatherSunlightColor sunlightColor
+#define sunVisibilitySmooth 1.0
+#define biomeCanPrecipitateSmooth biomePrecipSmooth
+#define oceanBiomeSmooth biomeOceanSmooth
+#define riverBiomeSmooth biomeRiverSmooth
+// Halcyon's deep-water darkness slider and detail-wave strength are not imported (neutral).
+#define WATER_INSCATTER_GAIN 1.0
+#define WAVE_DETAIL 1.0
+#ifndef DIM_NETHER
+    #define SHADOWS
+#endif
+#if defined VOLUMETRIC_CLOUDS && defined CLOUD_SHADOW_READ
+    #define CLOUDS
+    #define getCloudShadow(p) cloudShadow(p)
+#endif

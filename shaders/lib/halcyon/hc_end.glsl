@@ -3,6 +3,7 @@
 // prefix between hc_begin.glsl and hc_end.glsl.
 #undef celestialAxis
 #undef henyeyGreenstein
+#undef k
 #undef lunarPenumbra
 #undef lunarUmbra
 #undef moonDiskRadiance
@@ -12,3 +13,5 @@
 #undef solarLimbDarkening
 #undef sunDiskRadiance
 #undef surfaceWetness
+#undef type
+#undef waveTime

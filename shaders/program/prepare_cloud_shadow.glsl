@@ -4,6 +4,9 @@
 #include "/lib/core/frame_state.glsl"
 #include "/lib/clouds/clouds.glsl"
 #include "/lib/clouds/cloud_shadow.glsl"
+#if CLOUD_SOURCE == 1
+    #include "/lib/halcyon/halcyon_clouds.glsl"
+#endif
 
 #ifdef STAGE_COMPUTE
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
@@ -25,7 +28,11 @@ void main() {
     if (frameStateValid() && fsLightDir.w >= 0.0) {
         vec2 xz = cloudShadowTexelToScene(px);
         vec3 basePoint = vec3(xz.x, fsCloud.z - cameraPosition.y, xz.y);
-        t = cloudShadowTransmittance(basePoint, fsLightDir.xyz);
+        #if CLOUD_SOURCE == 1
+            t = halcyonCloudShadow(basePoint);
+        #else
+            t = cloudShadowTransmittance(basePoint, fsLightDir.xyz);
+        #endif
     }
     imageStore(cloudShadowMap, px, vec4(t));
 }

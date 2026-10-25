@@ -38,7 +38,11 @@ void main() {
 
 #ifdef STAGE_FRAGMENT
 #include "/lib/water/waves.glsl"
-#include "/lib/water/water_sim_sample.glsl"
+#if WATER_SOURCE == 1 && defined DIM_OVERWORLD
+    #include "/lib/halcyon/halcyon_water_sim.glsl"
+#else
+    #include "/lib/water/water_sim_sample.glsl"
+#endif
 #include "/lib/water/water_record.glsl"
 #include "/lib/weather/wetness.glsl"
 #include "/lib/lighting/brdf.glsl"
@@ -76,7 +80,14 @@ void main() {
             float footprint = dist * pixelAngularSize() / max(abs(viewDir.y), 0.12);
             WaveSample w = waveSurface(xz, waveTime(), waterOpenness(vLightmap.y), footprint);
             vec2 slope = w.slope;
-            #ifdef WATER_SIMULATION
+            #if WATER_SOURCE == 1 && defined DIM_OVERWORLD
+                // Halcyon's ocean swells on top of the wave spectrum, then its simulation.
+                vec2 footprintAV = vec2(footprint, dist * pixelAngularSize());
+                slope += halcyonSwellSlope(xz, waterOpenness(vLightmap.y), safeNormalize(viewDir.xz), footprintAV);
+                #ifdef WATER_SIMULATION
+                    slope += halcyonWaterSimSlope(vScenePos);
+                #endif
+            #elif defined WATER_SIMULATION
                 SimSurface sim = sampleWaterSim(vScenePos);
                 slope += sim.slope;
             #endif
