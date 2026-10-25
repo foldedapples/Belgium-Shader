@@ -22,11 +22,12 @@ Status values: **ported** (imported, adapted, compiles in every variant; not yet
 | Aurora | `atmosphere/sky/aurora.glsl` | ported | Sky Source |
 | Cirrus + 22° halo | `atmosphere/sky/cirrus.glsl` | replaced: its 3.2 km layer fanned into streaks in game; Belgium's 8 km layer with a new 22° halo is used, driven by Halcyon's Cirrus Coverage / Cloud Movement Speed | Sky Source |
 | Rainbows | `atmosphere/sky/rainbow.glsl` | ported | Sky Source |
-| Volumetric clouds, cloud shadows, cloud composite | `atmosphere/volumetricClouds.glsl`, `cloudComposite.glsl`, `program/dc_volumetricClouds.glsl`, `prepare5.glsl`, `cloudNoise.bin` | pending | |
+| Volumetric clouds, cloud shadows | `atmosphere/volumetricClouds.glsl`, `cloudNoise.bin` | ported: density, lighting and march inside Belgium's cloud passes; `cloudComposite`, `dc_volumetricClouds`, `prepare5` not needed (Belgium's passes do their job) | Cloud Source |
 | End black hole, End ambient, End portal | `atmosphere/sky/blackHole.glsl`, `endAmbient.glsl` | pending | |
-| Interactive water simulation | `water/waterSim.glsl`, `program/waterSim.glsl` | pending | |
+| Interactive water simulation | `water/waterSim.glsl`, `program/waterSim.glsl` | ported (prepare_a..d, Overworld) | Water Source |
+| Ocean swells | from the `waveNormals.glsl` notes (assembled into `halcyon_waves.glsl`) | ported (added to Belgium's waves) | Water Source |
 | Rain ripples | `water/rainRipples.glsl` | ported (water and puddles) | Rain Ripple Source |
-| Caustics, underwater shafts | `water/caustics.glsl`, `underwaterShafts.glsl` | pending | |
+| Caustics, underwater shafts | `water/caustics.glsl`, `underwaterShafts.glsl`, refraction helpers from the `waterFog.glsl` notes | ported (shafts use Belgium's water medium) | Water Source |
 | Wetness / puddles | `water/wetnessSimple.glsl` | pending | |
 | Opaque SSR (GGX) | `lighting/opaqueReflections.glsl`, `util/ggx.glsl` | pending | |
 | SSGI | `program/d2_ssgiTrace.glsl`, `d3_ssgiTemporal.glsl`, `d4_ssgiApply.glsl` | pending | |

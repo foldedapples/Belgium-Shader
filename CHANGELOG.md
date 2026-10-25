@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.0-dev (branch five-features, not yet tested in game)
+
+Research basis: Schneider, Nubis (SIGGRAPH 2015/2017/2022) for clouds; Stachowiak, Stochastic
+Screen-Space Reflections (SIGGRAPH 2015) for reflection reprojection; Garg & Nayar, Photorealistic
+Rendering of Rain Streaks (SIGGRAPH 2006) for rain; voxel flood-fill / light propagation volume
+literature for coloured light.
+
+* **Clouds**: Halcyon's Nubis-style volumetric clouds are the default (Cloud Source): weather map
+  with coverage, type and storm cells; stratus in rain, scattered cumulus, cumulonimbus with
+  anvils in storms; wind shear; 4-octave multiple scattering; adaptive stepping. They run in
+  Belgium's cloud passes (reduced-resolution march, temporal reconstruction, cloud shadow map)
+  and set the layer and coverage in FrameState. Cloud Quality gains a Custom level.
+* **Rain**: streaks show the refracted surroundings (sky where open, lamps, sun/moon glint,
+  lightning) instead of diffuse white, at Rain Opacity (0.3), fading near and far, leaning with
+  the wind (Rain Wind Lean, stronger in storms). Snow keeps diffuse lighting.
+* **Water** (Water Source = Halcyon, Overworld): Halcyon's interactive simulation (control + up to
+  3 steps in prepare_a..d, its own SSBO and images), Halcyon's ocean swells added to the wave
+  spectrum, Halcyon's refraction-Jacobian caustics on underwater terrain, Halcyon's underwater sun
+  shafts on Belgium's water medium. Belgium's images renamed beWaterSimA/B; boats are entity 2 for
+  both simulations. The End keeps Belgium's simulation.
+* **Temporal reflections**: reflections reprojected through the virtual reflected point,
+  disocclusion-tested, clamped, roughness-weighted (colortex15).
+* **Coloured light**: wavefront flood fill (per-channel max minus one level), three steps per
+  frame - settles in 5 frames instead of ~3 s; Directional Block Light from the volume gradient.
+* tools/import_halcyon.py imports Halcyon programs and assembles modules from Halcyon's
+  integration notes verbatim; shims at Glimmer's include paths; refuses to rename uniforms.
+* tools/tests/test_floodfill.py.
+
 ## 0.3.2-dev (branch shadows-sky-fixes, not yet tested in game)
 
 * **Shadow swimming**: the radial distortion was centred on the camera, so every static
