@@ -323,7 +323,7 @@ void main() {
             vec3 worldPos = cameraPosition + scene1;
             bool wettable = (g.flags & (GB_FLAG_HAND | GB_FLAG_ENTITY)) == 0 && g.material != MAT_LAVA;
             float wet = wettable ? surfaceWetness(g.geoNormal, g.lightmap.y) : 0.0;
-            applyWetness(m, n, g.geoNormal, wet, ((g.flags & GB_FLAG_LOD) != 0 ? 0.0 : puddleMask(worldPos, g.geoNormal, wet)), worldPos);
+            applyWetness(m, n, g.geoNormal, wet, ((g.flags & GB_FLAG_LOD) != 0 ? 0.0 : puddleMask(worldPos, g.geoNormal, wet, g.material)), worldPos, g.lightmap.y);
         }
         #endif
         if (usesScreenSpaceReflection(m, g.flags)) {

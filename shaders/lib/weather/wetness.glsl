@@ -13,6 +13,9 @@
 // * Ripples: procedural rings from raindrops on puddles and water.
 
 #include "/lib/core/textures.glsl"
+#if RAIN_RIPPLE_SOURCE == 1
+    #include "/lib/halcyon/halcyon_rain.glsl"
+#endif
 
 float rainReach(vec3 geoNormal, float skyLight) {
     float open = smoothstep(0.86, 0.97, skyLight);
@@ -29,9 +32,16 @@ float surfaceWetness(vec3 geoNormal, float skyLight) {
     #endif
 }
 
-float puddleMask(vec3 worldPos, vec3 geoNormal, float wet) {
+// Puddles collect on solid up-facing surfaces. Not on foliage and plants (water runs off),
+// sand (drains), snow, ice or glass. Before, any up-facing face could hold one, leaf tops too.
+bool canHoldPuddle(int material) {
+    return !isFoliage(material) && material != MAT_SAND && material != MAT_SNOW && material != MAT_ICE
+        && material != MAT_GLASS && material != MAT_GLASS_STAINED && material != MAT_WATER;
+}
+
+float puddleMask(vec3 worldPos, vec3 geoNormal, float wet, int material) {
     #if defined WETNESS && defined PUDDLES
-        if (geoNormal.y < 0.95 || wet <= 0.0) return 0.0;
+        if (geoNormal.y < 0.95 || wet <= 0.0 || !canHoldPuddle(material)) return 0.0;
         vec2 xz = mod(worldPos.xz, 16384.0);
         float n = texture(noise2dTex, xz / 96.0).r * 0.7 + texture(noise2dTex, xz / 23.0).g * 0.3;
         float threshold = 1.0 - PUDDLE_AMOUNT * wet * 0.55;
@@ -72,7 +82,16 @@ vec2 rainRippleSlope(vec2 xz, float time, float intensity) {
 }
 
 // Modifies a decoded material and its normal for rain. `worldPos` is absolute (for noise).
-void applyWetness(inout Material m, inout vec3 n, vec3 geoNormal, float wet, float puddle, vec3 worldPos) {
+// Ripple slope on standing water, from the selected source (Rain Ripple Source).
+vec2 rainRipples(vec3 worldPos, float skyLight) {
+    #if RAIN_RIPPLE_SOURCE == 1
+        return halcyonRainRippleSlope(worldPos.xz, length(worldPos - cameraPosition), skyLight);
+    #else
+        return rainRippleSlope(worldPos.xz, frameTimeCounter, fsWeather.z * rainReach(vec3(0.0, 1.0, 0.0), skyLight));
+    #endif
+}
+
+void applyWetness(inout Material m, inout vec3 n, vec3 geoNormal, float wet, float puddle, vec3 worldPos, float skyLight) {
     if (wet <= 0.0) return;
     // Darkening from absorbed water, strongest for porous materials.
     float darken = wet * mix(0.12, 0.5, m.porosity);
@@ -85,7 +104,7 @@ void applyWetness(inout Material m, inout vec3 n, vec3 geoNormal, float wet, flo
         if (!m.metal) m.f0 = mix(m.f0, vec3(0.02), puddle);
         n = normalize(mix(n, geoNormal, puddle));
         #ifdef RAIN_RIPPLES
-            vec2 s = rainRippleSlope(worldPos.xz, frameTimeCounter, fsWeather.z) * puddle;
+            vec2 s = rainRipples(worldPos, skyLight) * puddle;
             n = normalize(n + vec3(-s.x, 0.0, -s.y));
         #endif
     }

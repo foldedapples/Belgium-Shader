@@ -81,7 +81,12 @@ void main() {
                 slope += sim.slope;
             #endif
             #if defined RAIN_RIPPLES && !defined DIM_NETHER
-                slope += rainRippleSlope(xz, frameTimeCounter, fsWeather.z * rainReach(vec3(0.0, 1.0, 0.0), vLightmap.y)) * 2.0;
+                // Halcyon's ripples are scaled for open water already; Belgium's need x2 here.
+                #if RAIN_RIPPLE_SOURCE == 1
+                    slope += rainRipples(cameraPosition + vScenePos, vLightmap.y);
+                #else
+                    slope += rainRipples(cameraPosition + vScenePos, vLightmap.y) * 2.0;
+                #endif
             #endif
             n = waveNormal(slope);
             // Normals must not face away from a camera looking at the surface from above.

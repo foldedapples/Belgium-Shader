@@ -7,6 +7,7 @@
 #undef lunarUmbra
 #undef moonDiskRadiance
 #undef nightSky
+#undef rainRippleSlope
 #undef solarCoverage
 #undef solarLimbDarkening
 #undef sunDiskRadiance

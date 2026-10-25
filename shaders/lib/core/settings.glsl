@@ -141,6 +141,9 @@ const float sunPathRotation = -25.0; // [-60.0 -50.0 -40.0 -30.0 -25.0 -20.0 -10
 // ---------------------------------------------------------------- Halcyon sky ------------
 // Sky Source: 1 = Halcyon's sky (lib/halcyon, the default), 0 = Belgium's (lib/sky).
 #define SKY_SOURCE 1 // [0 1]
+// Rain Ripple Source: 1 = Halcyon's ripples (lib/halcyon/water/rainRipples.glsl), 0 = Belgium's.
+#define RAIN_RIPPLE_SOURCE 1 // [0 1]
+#define RAIN_RIPPLE_STRENGTH 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0]
 // Options below are Halcyon's, copied from its settings.glsl. AURORA, AURORA_BRIGHTNESS,
 // MOON_BRIGHTNESS, RAINBOW_BRIGHTNESS and STAR_TWINKLE are shared with Belgium's sky.
 // Belgium's options that used these names for something else are now BE_*.

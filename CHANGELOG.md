@@ -18,6 +18,13 @@
 * **Bloom**: anti-firefly weighting now in exposed units (it did nothing at night), and bloom
   input is compressed around 64x white so the sun no longer floods the screen.
 * Debug views 23 (bloom contribution) and 24 (before tone mapping, magenta > 4x white).
+* **Rain ripples**: Halcyon's ripples ported as the default (Rain Ripple Source; Belgium's
+  selectable). Belgium's re-dripped at fixed spots on a fixed beat and ignored rain intensity
+  for drop count; Halcyon's drops appear at fresh random places, more in heavier rain, with a
+  splash and a distance fade. Ripple Strength option.
+* **Puddles** only on solid surfaces (not foliage, plants, sand, snow, ice, glass).
+* Halcyon adapter no longer includes the atmosphere module itself (it could hide the LUT
+  functions from programs that include it first).
 
 ## 0.3.1-dev (branch end-lighting-fixes, not yet tested in game)
 

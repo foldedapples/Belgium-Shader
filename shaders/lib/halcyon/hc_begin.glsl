@@ -7,6 +7,7 @@
 #define lunarUmbra hc_lunarUmbra
 #define moonDiskRadiance hc_moonDiskRadiance
 #define nightSky hc_nightSky
+#define rainRippleSlope hc_rainRippleSlope
 #define solarCoverage hc_solarCoverage
 #define solarLimbDarkening hc_solarLimbDarkening
 #define sunDiskRadiance hc_sunDiskRadiance

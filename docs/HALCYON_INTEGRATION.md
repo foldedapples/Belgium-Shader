@@ -25,7 +25,8 @@ Status values: **ported** (imported, adapted, compiles in every variant; not yet
 | Volumetric clouds, cloud shadows, cloud composite | `atmosphere/volumetricClouds.glsl`, `cloudComposite.glsl`, `program/dc_volumetricClouds.glsl`, `prepare5.glsl`, `cloudNoise.bin` | pending | |
 | End black hole, End ambient, End portal | `atmosphere/sky/blackHole.glsl`, `endAmbient.glsl` | pending | |
 | Interactive water simulation | `water/waterSim.glsl`, `program/waterSim.glsl` | pending | |
-| Caustics, underwater shafts, rain ripples | `water/caustics.glsl`, `underwaterShafts.glsl`, `rainRipples.glsl` | pending | |
+| Rain ripples | `water/rainRipples.glsl` | ported (water and puddles) | Rain Ripple Source |
+| Caustics, underwater shafts | `water/caustics.glsl`, `underwaterShafts.glsl` | pending | |
 | Wetness / puddles | `water/wetnessSimple.glsl` | pending | |
 | Opaque SSR (GGX) | `lighting/opaqueReflections.glsl`, `util/ggx.glsl` | pending | |
 | SSGI | `program/d2_ssgiTrace.glsl`, `d3_ssgiTemporal.glsl`, `d4_ssgiApply.glsl` | pending | |

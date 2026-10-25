@@ -7,7 +7,7 @@
 // See docs/HALCYON_INTEGRATION.md for the unit conventions.
 #include "/lib/core/common.glsl"
 #include "/lib/core/frame_state.glsl"
-#include "/lib/atmosphere/atmosphere.glsl"
+// (No atmosphere include here: programs include it with their own ATMOSPHERE_LUTS choice.)
 
 // ---------------------------------------------------------------- small helpers
 #define clamp01(x) clamp(x, 0.0, 1.0)
@@ -35,6 +35,18 @@ vec3 hash33(vec3 p3) {
     return fract((p3.xxy + p3.yxx) * p3.zyx);
 }
 
+// Halcyon's float-input hashes (also Hoskins); Belgium's hash12/hash22 take ivec2.
+float hash12(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+vec2 hash22(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx + p3.yz) * p3.zy);
+}
+
 // Halcyon calls henyeyGreenstein(g, cosTheta); Belgium's takes (cosTheta, g). Inside the
 // Halcyon region the name is mapped here (hc_begin.glsl).
 float hc_henyeyGreenstein(float g, float cosTheta) {
@@ -48,13 +60,5 @@ uniform sampler2D moonTex;          // Halcyon NASA moon disk (textures/halcyon)
 uniform sampler2D milkyWayTex;      // Halcyon NASA Milky Way, galactic, asinh-warped
 uniform sampler2D starCatalogTex;   // Halcyon Hipparcos + Yale BSC catalogue (RGBA32F)
 uniform float hc_surfaceWetness;    // Halcyon's custom uniform (shaders.properties)
-
-// ---------------------------------------------------------------- units
-// Halcyon's night-sky constants were tuned against Glimmer's moonlight, whose luminance
-// (0.00268) matches Belgium's full-moon irradiance (SUN_IRRADIANCE * MOON_IRRADIANCE_RATIO);
-// night objects are rescaled by the ratio so they keep their look under Belgium's exposure.
-const float HC_NIGHT_SCALE = (SUN_IRRADIANCE * MOON_IRRADIANCE_RATIO) / 0.00268;
-// Halcyon's sun disk uses the solar spectrum tint below at Belgium's solar irradiance.
-const vec3 HC_SUN_IRRADIANCE = vec3(1.0, 0.949, 0.937) * SUN_IRRADIANCE;
 
 #endif

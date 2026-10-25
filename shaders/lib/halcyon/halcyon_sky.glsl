@@ -10,6 +10,17 @@
 // (viewTransmittance) when HALCYON_SKY_RENDER is defined; begin_state only needs the state.
 #include "/lib/halcyon/adapter_core.glsl"
 #include "/lib/clouds/cirrus.glsl"
+// After the program's own atmosphere include (guarded), so its ATMOSPHERE_LUTS choice holds.
+#include "/lib/atmosphere/atmosphere.glsl"
+
+// ---------------------------------------------------------------- units
+// Halcyon's night-sky constants were tuned against Glimmer's moonlight, whose luminance
+// (0.00268) matches Belgium's full-moon irradiance (SUN_IRRADIANCE * MOON_IRRADIANCE_RATIO);
+// night objects are rescaled by the ratio so they keep their look under Belgium's exposure.
+const float HC_NIGHT_SCALE = (SUN_IRRADIANCE * MOON_IRRADIANCE_RATIO) / 0.00268;
+// Halcyon's sun disk uses the solar spectrum tint below at Belgium's solar irradiance.
+const vec3 HC_SUN_IRRADIANCE = vec3(1.0, 0.949, 0.937) * SUN_IRRADIANCE;
+
 
 // Values begin_state copies into FrameState (outside the region, so plain member names).
 struct HalcyonCelestial {

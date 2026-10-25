@@ -36,6 +36,7 @@ MODULES = [
     "atmosphere/sky/aurora.glsl",
     # atmosphere/sky/cirrus.glsl: replaced by Belgium's cirrus + 22 deg halo (docs/HALCYON_INTEGRATION.md)
     "atmosphere/sky/rainbow.glsl",
+    "water/rainRipples.glsl",
 ]
 TEXTURES = [
     "moon_2k.png", "moon_2k.png.mcmeta", "moon_4k.png", "moon_4k.png.mcmeta",
