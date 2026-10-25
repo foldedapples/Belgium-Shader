@@ -1,0 +1,6 @@
+# build output
+/dist/
+*.zip
+__pycache__/
+# raw downloads for asset preparation (tools/prep_*.py read them from here)
+/tools/raw/
