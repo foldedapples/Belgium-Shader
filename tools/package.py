@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--version", default="0.3.0-dev")
+    ap.add_argument("--version", default="0.3.1-dev")
     ap.add_argument("--skip-validate", action="store_true")
     args = ap.parse_args()
 

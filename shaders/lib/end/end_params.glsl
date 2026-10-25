@@ -21,6 +21,11 @@ vec3 endBlackHoleDir() {
     return normalize(vec3(cos(el) * sin(az), sin(el), -cos(el) * cos(az)));
 }
 
+// The End's haze: uniform extinction per block, shared by endFog and the volumetric-light
+// pass, and the fraction of extinguished light that is scattered (dark dust).
+float endHazeExtinction() { return 0.0035 * END_FOG_DENSITY; }
+const float END_HAZE_ALBEDO = 0.12;
+
 vec3 endLightIrradiance() {
     return blackbody(6200.0) * (0.55 * END_LIGHT_INTENSITY);
 }

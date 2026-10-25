@@ -274,6 +274,25 @@ def lint_iris_source_rules(opts: dict[str, Option]) -> list[str]:
             m = re.match(r'\s*\w+\s+(\w+)\s*\([^)]*\)\s*(\{|$)', line)
             if m and (m.group(1) in IRIS_INJECTED_FUNCTIONS or m.group(1).startswith("iris_")):
                 problems.append(f"{rel}:{n}: function {m.group(1)} clashes with a function Iris injects")
+    # Program names Iris actually loads (ProgramSet): setup programs are numbered (setup,
+    # setup1 ... setup99); every other compute family is name.csh then name_a ... name_z, and the
+    # letter chain stops at the first gap. A setup_a.csh is silently never run (found in game:
+    # the black-hole, DFG and multiple-scattering LUTs were never built).
+    family = re.compile(r"^(begin|shadow|final|shadowcomp\d*|prepare\d*|deferred\d*|composite\d*)(?:_([a-z]))?$")
+    for world in sorted(SHADERS.glob("world*")):
+        names = {p.stem for p in world.glob("*.csh")}
+        for n in sorted(names):
+            if re.fullmatch(r"setup\d{0,2}", n):
+                continue
+            m = family.match(n)
+            if not m:
+                problems.append(f"{world.name}/{n}.csh: Iris does not load compute programs with this name")
+                continue
+            if m.group(2):
+                base, letter = m.group(1), m.group(2)
+                missing = [c for c in "abcdefghijklmnopqrstuvwxyz"[: ord(letter) - 97] if f"{base}_{c}" not in names]
+                if missing:
+                    problems.append(f"{world.name}/{n}.csh: Iris stops at the missing {base}_{missing[0]}.csh, so this never runs")
     # A boolean #define is only a menu option if some line is exactly `#ifdef NAME`/`#ifndef NAME`.
     for name, o in opts.items():
         if o.kind == "toggle" and name not in ifdef_refs:

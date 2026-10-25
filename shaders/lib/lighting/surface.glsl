@@ -5,6 +5,7 @@
 #include "/lib/material/labpbr.glsl"
 #include "/lib/lighting/brdf.glsl"
 #include "/lib/post/color_profile.glsl"
+#include "/lib/lighting/block_light_falloff.glsl"
 
 // Shared surface lighting for deferred and forward paths (ORIGINAL_ARCHITECTURE.md sec. 5).
 // All inputs are scene space; `v` points from the surface to the camera.
@@ -78,12 +79,9 @@ float dimensionSkyVisibility(float skyLight) {
     #endif
 }
 
-// Block light from the vanilla block lightmap: a softened inverse-square falloff in light
-// levels, zero exactly at level 0.
+// Block light from the vanilla block lightmap (falloff: block_light_falloff.glsl).
 vec3 blockLightIrradiance(float blockLight) {
-    float level = saturate(blockLight) * 15.0;
-    float e = pow(1.0 / (16.0 - level), 1.65);
-    e *= smoothstep(0.0, 1.5, level);
+    float e = blockLightFalloff(saturate(blockLight) * 15.0);
     return blackbody(float(BLOCKLIGHT_TEMPERATURE)) * e * 2.2 * BLOCKLIGHT_INTENSITY * CP_BLOCK_LIGHT;
 }
 

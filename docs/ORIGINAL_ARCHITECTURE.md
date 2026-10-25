@@ -28,9 +28,9 @@ disagree, the code is wrong or this document must be updated in the same commit.
 
 ```
 setup        setup.csh        transmittance LUT          (once per pipeline build)
-             setup_a.csh      multiple-scattering LUT
-             setup_b.csh      DFG (split-sum) LUT
-             setup_c.csh      black-hole geodesic LUT    (End only)
+             setup1.csh        multiple-scattering LUT
+             setup2.csh        DFG (split-sum) LUT
+             setup3.csh        black-hole geodesic LUT    (End only)
 begin        begin.csh        FrameState update: celestial model, eclipses, light choice,
                               shadow matrices, weather smoothing, water-sim control
              begin_a.csh      sky-view LUT + hemispherical sky irradiance
@@ -112,15 +112,15 @@ deliberate trade for correctness and is listed in `PERFORMANCE.md` as a later op
 | Image | Format | Size | Producer → Consumer | Lifetime |
 |---|---|---|---|---|
 | transmittanceLut | RGBA16F | 256×64 | setup → everything lit by the sun | pipeline |
-| multiScatterLut | RGBA16F | 32×32 | setup_a → begin_a | pipeline |
-| dfgLut | RG16F | 64×64 | setup_b → deferred4, composite | pipeline |
+| multiScatterLut | RGBA16F | 32×32 | setup1 → begin_a | pipeline |
+| dfgLut | RG16F | 64×64 | setup2 → deferred4, composite | pipeline |
 | skyViewLut | RGBA16F | 192×216 (sun and moon panels) | begin_a → deferred4, composite, translucents | frame |
 | waterSimA / waterSimB | RGBA16F (h_now, h_prev, ∂h/∂x, ∂h/∂z) | N×N (N = 256…2048) | begin_b..e ↔ ping-pong → gbuffers_water | persistent |
 | cloudShadowMap | R16F | 256² / 512² / 1024² | prepare → deferred4, composite, composite1, translucents | frame |
 | bloomAtlas | RGBA16F | 0.75×0.5 of screen | composite7..15 → final | frame |
 | voxelMap | R32UI (cleared each frame) | 128×64×128 | shadow.vsh → shadowcomp | frame |
 | lightVolA / lightVolB | RGBA16F | 128×64×128 | shadowcomp ping-pong → deferred4 | persistent |
-| blackHoleLut | RGBA32F | 512×256 | setup_c → deferred4, composite (End) | pipeline |
+| blackHoleLut | RGBA32F | 512×256 | setup3 → deferred4, composite (End) | pipeline |
 
 ### 2.3 Shader storage buffers
 
@@ -276,7 +276,7 @@ and total internal reflection from below.
 * Aurora: raymarched emission layer 100–300 km; curtains are distance fields to slowly
   deforming procedural curves; altitude-dependent spectrum (green 557.7 nm low, red 630 nm
   high, occasional N₂⁺ blue/violet fringe); nightly activity from a deterministic per-day hash.
-* End black hole: Schwarzschild null geodesics precomputed into a LUT `r(b, φ)` in `setup_c`;
+* End black hole: Schwarzschild null geodesics precomputed into a LUT `r(b, φ)` in `setup3`;
   per-pixel lensing and disk crossings become texture lookups. Performance: primary disk image
   only; High: primary + secondary image; Cinematic: direct per-pixel integration. Disk
   temperature from a thin-disk profile, observed colour with relativistic Doppler and

@@ -1,5 +1,6 @@
 #ifndef LIGHTING_HAND_LIGHT_GLSL
 #define LIGHTING_HAND_LIGHT_GLSL
+#include "/lib/lighting/block_light_falloff.glsl"
 #include "/lib/core/common.glsl"
 #include "/lib/material/material_ids.glsl"
 #include "/lib/post/color_profile.glsl"
@@ -15,11 +16,7 @@ uniform int heldItemId;
 uniform int heldItemId2;
 
 // Irradiance-like intensity of a vanilla light level (0..15), shared with block light.
-float lightLevelIntensity(float level) {
-    level = clamp(level, 0.0, 15.0);
-    float e = pow(1.0 / (16.0 - level), 1.65);
-    return e * smoothstep(0.0, 1.5, level) * 2.2;
-}
+float lightLevelIntensity(float level) { return blockLightFalloff(level) * 2.2; }
 
 vec3 handLightColor(int itemId) {
     int m = materialFromBlockId(itemId);

@@ -99,32 +99,64 @@ vec4 diskEmission(vec3 p, vec3 photonDir, BlackHoleFrame f, float r) {
     return vec4(colour * intensity * BH_DISK_BRIGHTNESS * 6.0, alpha);
 }
 
-// Deep-space background: stars, faint nebulae and rare distant galaxies.
+// Deep-space background: stars, nebulae with dust lanes, and rare distant galaxies. Sampled
+// along the lensed direction, so everything here bends around the black hole.
+float nebulaFbm(vec3 p, int octaves) {
+    float s = 0.0, a = 0.5, norm = 0.0;
+    for (int i = 0; i < octaves; i++) {
+        s += a * valueNoise(p); norm += a;
+        p = p * 2.03 + vec3(1.7, 9.2, 3.4);
+        a *= 0.5;
+    }
+    return s / norm;
+}
+
+// Emission nebula: domain-warped fBm thresholded into clouds, sharpened by ridged filaments,
+// cut by dark dust lanes; colour from the hydrogen-alpha / oxygen-III / End-violet palette.
+// Returns radiance (rgb) and dust opacity (a), which also dims the stars behind it. Before,
+// three octaves of value noise at a one-radian scale gave large soft blobs; with the End's
+// exposure at its limit they read as glowing white clouds (seen in game).
+vec4 endNebula(vec3 dir) {
+    vec3 p = dir * 2.0;
+    vec3 warp = vec3(nebulaFbm(p + 11.0, 2), nebulaFbm(p + 23.0, 2), nebulaFbm(p + 37.0, 2)) - 0.5;
+    vec3 q = p + warp * 0.9;
+    float d = nebulaFbm(q * 1.6, 5);
+    float ridge = 1.0 - abs(2.0 * valueNoise(q * 5.1) - 1.0);
+    float filaments = ridge * ridge * ridge * ridge;
+    float cloud = smoothstep(0.52, 0.85, d);
+    float neb = cloud * (0.3 + 0.7 * filaments * smoothstep(0.45, 0.7, d));
+    float dust = smoothstep(0.52, 0.74, nebulaFbm(q * 3.3 + 5.0, 3)) * smoothstep(0.35, 0.6, d);
+    neb *= 1.0 - 0.85 * dust;
+    float hue = valueNoise(q * 0.9 + 4.0);
+    vec3 violet = vec3(0.55, 0.35, 0.85), teal = vec3(0.25, 0.7, 0.75), hAlpha = vec3(0.95, 0.28, 0.35);
+    vec3 colour = mix(mix(violet, teal, smoothstep(0.3, 0.7, hue)), hAlpha, smoothstep(0.62, 0.9, d) * 0.5);
+    return vec4(colour * neb * 0.02 * END_NEBULA_BRIGHTNESS, dust * 0.6);
+}
+
 vec3 spaceBackground(vec3 dir, float pixelAngle) {
-    vec3 stars = starField(dir, pixelAngle, 0.0) * END_STAR_BRIGHTNESS * NIGHT_SKY_BRIGHTNESS * 0.5;
-    vec3 p = dir * 3.0;
-    float n1 = valueNoise(p) * 0.55 + valueNoise(p * 2.3) * 0.3 + valueNoise(p * 5.1) * 0.15;
-    float n2 = valueNoise(p * 1.7 + 11.0) * 0.6 + valueNoise(p * 4.1 + 3.0) * 0.4;
-    float neb = smoothstep(0.5, 0.85, n1);
-    vec3 nebColour = mix(vec3(0.35, 0.15, 0.55), vec3(0.1, 0.35, 0.5), n2) * neb;
-    float dust = smoothstep(0.55, 0.8, n2) * 0.7;
-    vec3 nebula = nebColour * (1.0 - dust) * 0.004 * END_NEBULA_BRIGHTNESS;
-    // Galaxies: one in ~200 coarse cells holds a small elliptical smudge.
+    vec4 neb = endNebula(dir);
+    vec3 stars = starField(dir, pixelAngle, 0.0) * END_STAR_BRIGHTNESS * NIGHT_SKY_BRIGHTNESS * 0.5 * (1.0 - neb.a);
+    // Galaxies: about one cell in 300 holds a small disk galaxy (bulge + exponential disk at
+    // a random inclination), at the brightness of a faint star. Before, one in 33 cells did,
+    // which scattered ~400 bright streaks over the sky.
     int face; vec2 uv;
     cubeFace(dir, face, uv);
     vec2 g = uv * 48.0;
     ivec2 c = ivec2(floor(g));
     uint h = hashU(uvec3(uvec2(c), uint(face) + 101u));
     vec3 galaxy = vec3(0.0);
-    if (u32ToUnit(h) < 0.03) {
+    if (u32ToUnit(h) < 0.0033) {
         vec2 centre = vec2(c) + 0.3 + 0.4 * vec2(u32ToUnit(hashU(h)), u32ToUnit(hashU(h ^ 0x9e3779b9u)));
-        vec2 d = g - centre;
-        float a = u32ToUnit(hashU(h + 7u)) * PI;
-        d = rotate2(a) * d;
-        float e = exp(-(sq(d.x / 0.08) + sq(d.y / 0.03)));
-        galaxy = mix(blackbody(5200.0), blackbody(9000.0), u32ToUnit(hashU(h + 3u))) * e * 0.006;
+        float size = mix(0.04, 0.1, u32ToUnit(hashU(h + 11u)));
+        float incl = mix(0.25, 1.0, u32ToUnit(hashU(h + 5u)));      // minor/major axis ratio
+        vec2 d = rotate2(u32ToUnit(hashU(h + 7u)) * PI) * (g - centre);
+        d.y /= incl;
+        float r = length(d) / size;
+        float profile = exp(-sq(r / 0.18)) * 1.5 + exp(-r * 3.0);
+        vec3 tint = mix(blackbody(4800.0), blackbody(8000.0), u32ToUnit(hashU(h + 3u)));
+        galaxy = tint * profile * 0.0025;
     }
-    return stars + nebula + galaxy;
+    return stars + neb.rgb + galaxy;
 }
 
 vec3 blackHoleSky(vec3 d, float pixelAngle) {

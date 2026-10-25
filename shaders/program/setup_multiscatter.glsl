@@ -1,4 +1,4 @@
-// setup_a.csh - multiple-scattering LUT (32x32 over sun zenith cosine x altitude).
+// setup1.csh - multiple-scattering LUT (32x32 over sun zenith cosine x altitude).
 // Approximates all orders of scattering beyond the first as isotropic, following the energy
 // argument of Hillaire 2020: second-order radiance L2 and the transfer factor f_ms give the
 // geometric series L2 / (1 - f_ms). Written for unit sun irradiance.

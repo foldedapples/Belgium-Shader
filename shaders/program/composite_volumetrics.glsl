@@ -26,6 +26,9 @@
     #define CLOUD_SHADOW_READ
     #include "/lib/clouds/cloud_shadow.glsl"
 #endif
+#ifdef DIM_END
+    #include "/lib/end/end_params.glsl"
+#endif
 
 uniform sampler2D depthtex0;
 
@@ -81,8 +84,17 @@ void main() {
             vis *= c;
             sum += T * sigmaS * lightT * vis * dt;
         } else {
-            float k = heightFogDensityAt(cameraPosition.y + p.y);
-            sigmaS = vec3(k); sigmaT = vec3(k);
+            #ifdef DIM_END
+                // The End's haze (same extinction as endFog) is dark dust: only a small part of
+                // the black hole's light is scattered toward the camera. Before, the End used
+                // the Overworld's ground-fog model (morning mist from a day clock the End does
+                // not have), which made strong shafts and a bright band at the horizon.
+                sigmaT = vec3(endHazeExtinction());
+                sigmaS = sigmaT * END_HAZE_ALBEDO;
+            #else
+                float k = heightFogDensityAt(cameraPosition.y + p.y);
+                sigmaS = vec3(k); sigmaT = vec3(k);
+            #endif
             sum += T * sigmaS * vis * dt;
         }
         T *= exp(-sigmaT * dt);

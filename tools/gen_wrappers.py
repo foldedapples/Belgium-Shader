@@ -29,16 +29,22 @@ WATER_DIMS = ("world0", "world1")        # dimensions where water simulation run
 MANIFEST = [
     # ---- setup (once per pipeline) ----------------------------------------------------------
     ("setup",     "c", "setup_transmittance", [], ("world0",)),
-    ("setup_a",   "c", "setup_multiscatter", [], ("world0",)),
-    ("setup_b",   "c", "setup_dfg", [], ALL),
-    ("setup_c",   "c", "setup_blackhole", [], ("world1",)),
+    ("setup1",    "c", "setup_multiscatter", [], ("world0",)),
+    ("setup2",    "c", "setup_dfg", [], ALL),
+    ("setup3",    "c", "setup_blackhole", [], ("world1",)),
     # ---- begin (every frame, before shadows) ------------------------------------------------
     ("begin",     "c", "begin_state", [], ALL),
     ("begin_a",   "c", "begin_skyview", [], ("world0",)),
-    ("begin_b",   "c", "water_sim_step", ["SIM_STEP_INDEX 0"], WATER_DIMS),
-    ("begin_c",   "c", "water_sim_step", ["SIM_STEP_INDEX 1"], WATER_DIMS),
-    ("begin_d",   "c", "water_sim_step", ["SIM_STEP_INDEX 2"], WATER_DIMS),
-    ("begin_e",   "c", "water_sim_step", ["SIM_STEP_INDEX 3"], WATER_DIMS),
+    # Iris runs begin, begin_a, begin_b ... and stops at the first missing letter, so each
+    # dimension needs an unbroken chain: the Overworld has the sky-view LUT at begin_a.
+    ("begin_b",   "c", "water_sim_step", ["SIM_STEP_INDEX 0"], ("world0",)),
+    ("begin_c",   "c", "water_sim_step", ["SIM_STEP_INDEX 1"], ("world0",)),
+    ("begin_d",   "c", "water_sim_step", ["SIM_STEP_INDEX 2"], ("world0",)),
+    ("begin_e",   "c", "water_sim_step", ["SIM_STEP_INDEX 3"], ("world0",)),
+    ("begin_a",   "c", "water_sim_step", ["SIM_STEP_INDEX 0"], ("world1",)),
+    ("begin_b",   "c", "water_sim_step", ["SIM_STEP_INDEX 1"], ("world1",)),
+    ("begin_c",   "c", "water_sim_step", ["SIM_STEP_INDEX 2"], ("world1",)),
+    ("begin_d",   "c", "water_sim_step", ["SIM_STEP_INDEX 3"], ("world1",)),
     # ---- shadow --------------------------------------------------------------------------
     ("shadow",    "vf", "shadow", [], ALL),
     ("shadowcomp", "c", "shadowcomp_floodfill", [], ALL),

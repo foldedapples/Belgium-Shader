@@ -1,4 +1,4 @@
-// begin_b..begin_e.csh - one fixed time step of the local water simulation each
+// begin_b..begin_e.csh (Overworld) / begin_a..begin_d.csh (End) - one fixed time step of the local water simulation each
 // (SIM_STEP_INDEX 0..3). Steps beyond the number scheduled by begin.csh return immediately.
 //
 // Scheme: damped Klein-Gordon wave equation with Kelvin-Voigt viscosity,

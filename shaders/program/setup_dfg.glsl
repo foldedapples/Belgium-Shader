@@ -1,4 +1,4 @@
-// setup_b.csh - split-sum DFG LUT (64x64 over NdotV x perceptual roughness). Stores the scale
+// setup2.csh - split-sum DFG LUT (64x64 over NdotV x perceptual roughness). Stores the scale
 // (x) and bias (y) applied to F0 for the GGX / height-correlated Smith BRDF integrated over the
 // hemisphere, so prefiltered environment light can be weighted correctly: E = F0*x + y.
 // Integrated numerically with GGX importance sampling (Hammersley points).

@@ -4,6 +4,17 @@
 #include "/lib/core/common.glsl"
 #define FRAME_STATE_WRITER
 #include "/lib/core/frame_state.glsl"
+#include "/lib/compat/lod.glsl"
+#ifdef DIM_END
+    #include "/lib/end/end_params.glsl"
+#endif
+
+// Metering is scene-referred: the sky counts for less than surfaces, and samples darker than
+// 2^-20 count as 2^-20. Before, black space pixels (clamped at 1e-7, -23 stops) dominated the
+// log average whenever much of the view was sky, so the End and starry nights drove exposure
+// to its +9 EV limit and lit terrain, fog and planets blew out to white (seen in game).
+const float METER_SKY_WEIGHT = 0.3;
+const float METER_FLOOR_LOG2 = -20.0;
 
 #ifdef STAGE_COMPUTE
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
@@ -28,8 +39,14 @@ void main() {
         // Centre-weighted metering (Gaussian falloff toward the frame edge).
         vec2 c = uv - 0.5;
         float w = exp(-dot(c, c) * 5.0);
+        ivec2 px = ivec2(uv * vec2(viewWidth, viewHeight));
+        bool sky = texelFetch(depthtex0, px, 0).r >= 1.0;
+        #ifdef LOD_ENABLED
+            sky = sky && lodDepth(px, true) >= 1.0;
+        #endif
+        if (sky) w *= METER_SKY_WEIGHT;
         if (isnan(lum) || isinf(lum)) { lum = 0.0; w = 0.0; }
-        sumLog += w * log2(max(lum, 1e-7));
+        sumLog += w * max(log2(max(lum, 1e-30)), METER_FLOOR_LOG2);
         sumW += w;
     }
     sharedLog[id] = sumLog;
@@ -65,6 +82,14 @@ void main() {
     float key = 0.18 * mix(0.38, 1.0, smoothstep(-12.0, -3.5, avgLog));
     #ifdef AUTO_EXPOSURE
         float targetEv = clamp(log2(key / max(avgLum, 1e-7)), EXPOSURE_MIN_EV, EXPOSURE_MAX_EV);
+        #ifdef DIM_END
+            // The End's light never changes, so its exposure should barely move: stay within
+            // -1.5 / +1 stops of the exposure that puts lit End stone (albedo ~0.3, ~60 % of
+            // surfaces facing the hole) at middle grey.
+            float refLum = 0.3 * luminance(endLightIrradiance() * 0.6 + endAmbientIrradiance()) * INV_PI;
+            float refEv = log2(0.18 / max(refLum, 1e-6));
+            targetEv = clamp(targetEv, refEv - 1.5, refEv + 1.0);
+        #endif
     #else
         float targetEv = EXPOSURE_FIXED_EV;
     #endif

@@ -24,11 +24,15 @@ vec3 endSkyRadiance(vec3 dir, float pixelAngle) {
 }
 
 vec3 endFog(vec3 color, vec3 scenePos, float dist) {
-    float t = 1.0 - exp(-dist * 0.0035 * END_FOG_DENSITY);
-    vec3 dir = safeNormalize(scenePos);
-    // Haze glows faintly toward the disk.
-    float toward = pow(saturate(dot(dir, endBlackHoleDir()) * 0.5 + 0.5), 6.0);
-    vec3 fogCol = endAmbientIrradiance() * INV_PI * 1.4 + endLightIrradiance() * toward * 0.004;
+    float t = 1.0 - exp(-dist * endHazeExtinction());
+    // Ambient light scattered by the haze (isotropic, haze albedo). The directional glow toward
+    // the black hole is the volumetric-light pass's job when it is on (shadowed there).
+    vec3 fogCol = endAmbientIrradiance() * INV_PI * END_HAZE_ALBEDO * 4.0;
+    #ifndef VOLUMETRIC_LIGHT
+        vec3 dir = safeNormalize(scenePos);
+        float cosT = dot(dir, endBlackHoleDir());
+        fogCol += endLightIrradiance() * END_HAZE_ALBEDO * mix(henyeyGreenstein(cosT, 0.6), 0.25 * INV_PI, 0.35);
+    #endif
     return mix(color, fogCol, t);
 }
 

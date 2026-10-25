@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.1-dev (branch end-lighting-fixes, not yet tested in game)
+
+Root causes from the first End and night screenshots (Iris 1.10.8, MC 1.21.11):
+
+* **Setup programs never ran.** Iris loads setup programs as setup, setup1 ... setup99; the
+  pack named them setup_a/_b/_c, so the multiple-scattering LUT, the DFG (split-sum) LUT and the
+  black-hole geodesic LUT were never built in any dimension. Effects: the giant black disk in the
+  End (the whole ~40 degree lensing region read an empty LUT), no ambient specular on any
+  material (flat terrain, "LabPBR not working"), sky missing multiple scattering. Renamed
+  setup1/setup2/setup3.
+* **Water simulation never ran in the End**: its begin_b..e chain had no begin_a, and Iris stops
+  at the first missing letter. The End now uses begin_a..d.
+* validate.py checks compute program names against Iris's loader rules.
+* **Exposure** metered black sky pixels at -23 stops, so space and starry views drove exposure to
+  +9 EV and blew out terrain, fog, nebulae and planets. Sky pixels now weigh 0.3, samples are
+  floored at 2^-20, and the End's exposure stays near a reference derived from its constant light.
+* **End haze**: volumetric light used the Overworld's ground-fog model in the End (shafts, bright
+  horizon band). The End now has one haze shared by fog and light shafts, with a dust albedo.
+* **End sky**: nebulae rebuilt (domain-warped fBm, filaments, dust lanes that dim stars, emission
+  palette); galaxies reduced from ~400 bright streaks to ~40 small bulge+disk galaxies.
+* **Block light** tapers to zero over the last seven levels (it was ~9x moonlight at level 1 and
+  then cut off, drawing hard-edged diamonds at night); shared by lightmap and hand light.
+* **LabPBR normals**: the tangent frame now follows the face's real +U/+V directions (DirectX
+  convention per the LabPBR spec), independent of the vertex tangent's handedness sign.
+* tools/tests/render_end_nebula.py: offline preview of the End nebula.
+
 ## 0.3.0-dev (branch halcyon-integration, not yet tested in game)
 
 Halcyon's own feature code is being ported onto the Belgium engine (docs/HALCYON_INTEGRATION.md).

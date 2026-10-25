@@ -1,4 +1,4 @@
-// setup_c.csh (End) - geodesic LUT for the black hole: one column per impact parameter.
+// setup3.csh (End) - geodesic LUT for the black hole: one column per impact parameter.
 //   row 0      : x = escape angle phi_end (or -1 if captured), y = capture angle, z = b
 //   rows 1..255: (u, du/dphi) sampled at phi = (row - 1) / 254 * BH_PHI_MAX, u = 0 after escape,
 //                u = 1 after capture.

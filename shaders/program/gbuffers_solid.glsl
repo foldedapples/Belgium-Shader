@@ -97,6 +97,19 @@ void main() {
     vec3 n = safeNormalize(vNormal, faceN);
     vec3 tan = safeNormalize(vTangent.xyz - n * dot(n, vTangent.xyz), basisFromNormal(n)[0]);
     vec3 bit = cross(n, tan) * vTangent.w;
+    // LabPBR normals are DirectX-style: red grows toward +U, green toward +V (texture "down").
+    // Make the frame follow the actual texture directions on this face, measured from the
+    // screen-space derivatives (exact on flat block faces), instead of relying on the sign
+    // convention of the vertex tangent's handedness.
+    {
+        vec3 dp1 = dFdx(vScenePos), dp2 = dFdy(vScenePos);
+        vec2 duv1 = dFdx(vUv), duv2 = dFdy(vUv);
+        vec3 dp2perp = cross(dp2, n), dp1perp = cross(n, dp1);
+        vec3 dpdu = dp2perp * duv1.x + dp1perp * duv2.x;
+        vec3 dpdv = dp2perp * duv1.y + dp1perp * duv2.y;
+        if (dot(dpdu, dpdu) > 1e-20 && dot(tan, dpdu) < 0.0) tan = -tan;
+        if (dot(dpdv, dpdv) > 1e-20 && dot(bit, dpdv) < 0.0) bit = -bit;
+    }
     mat3 tbn = mat3(tan, bit, n);
 
     vec2 uv = vUv;
