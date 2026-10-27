@@ -44,21 +44,34 @@ struct BHResult {
     bool captured;
 };
 
-float diskTurbulence(float r, float phi, float t) {
-    // Keplerian angular velocity ~ r^-3/2; slowed for display.
-    float omega = 1.2 * pow(r, -1.5);
-    float ang = phi + omega * t * 6.0;
-    vec2 q = vec2(log(r) * 3.2, ang * 2.0);
-    float n = 0.0, amp = 0.55;
+// Gas structure of the disk at radius r, azimuth phi: fractal noise on a cylinder (log r, cos a,
+// sin a), so it is continuous all the way round (no seam) and streaks are stretched along the
+// orbit. The material orbits at the Keplerian rate (slowed for display).
+float diskGas(float r, float a) {
+    vec3 p = vec3(log(r) * 7.0, cos(a) * 2.2, sin(a) * 2.2);
+    float n = 0.0, amp = 0.5;
     for (int i = 0; i < 4; i++) {
-        float c = valueNoise(vec2(q.x * 3.0, fract(q.y / TAU) * 12.0 * exp2(float(i))) * exp2(float(i)) + float(i) * 7.3);
-        n += amp * c;
-        q *= 1.9;
+        n += amp * valueNoise(p + float(i) * 11.7);
+        p *= vec3(2.1, 1.7, 1.7);
         amp *= 0.5;
     }
-    // Spiral shear: streaks wound by differential rotation.
-    float streak = 0.5 + 0.5 * sin(ang * 3.0 + log(r) * 9.0 + n * 3.0);
-    return saturate(n * 0.8 + streak * 0.35);
+    return n / 0.9375;
+}
+
+// Differential rotation winds any pattern into ever tighter rings: after time t, radii r1 and r2
+// differ in angle by (omega(r1) - omega(r2)) t, which grows without bound. The old pattern
+// advected by phi + omega t (plus a spiral sinusoid) therefore turned into the fine concentric
+// bands seen in game, worse the longer the session. Here two copies are advected over a bounded
+// window of DISK_PERIOD seconds, half a period apart, and cross-faded (the flow-map scheme), so the
+// gas visibly orbits - inner parts faster - but the winding never exceeds one window's worth.
+const float DISK_PERIOD = 8.0;
+float diskTurbulence(float r, float phi, float t) {
+    float omega = 0.5 * pow(r, -1.5) * 3.0;            // Keplerian ~ r^-3/2, display rate
+    float p0 = fract(t / DISK_PERIOD), p1 = fract(t / DISK_PERIOD + 0.5);
+    float w0 = 1.0 - abs(2.0 * p0 - 1.0);
+    float n = diskGas(r, phi + omega * p0 * DISK_PERIOD) * w0
+            + diskGas(r * 1.07, phi + omega * p1 * DISK_PERIOD + 2.1) * (1.0 - w0);
+    return saturate((n - 0.25) * 1.6);
 }
 
 // Traces a ray in the BH frame: origin `ro` (|ro| = BH_OBSERVER_DIST), direction `rd`.

@@ -171,11 +171,14 @@ void main() {
     float maxD = min(dist, 200.0);
     float stepLen = maxD / float(VL_STEPS);
     vec3 eLight = endLightIlluminance();
-    float ph = phaseHG(dot(dir, END_LIGHT_DIR), 0.6);
+    // Thin dust near the islands only. It was 0.0012 / block with g = 0.6 over 200 blocks of every
+    // view ray, which towards the black hole added ~0.5 radiance in front of everything: the flat
+    // beige veil over the sky and the disk.
+    float ph = phaseHG(dot(dir, END_LIGHT_DIR), 0.4);
     for (int i = 0; i < VL_STEPS; i++) {
         float t = (float(i) + noise) * stepLen;
         vec3 p = dir * t;
-        float sigma = 0.0012 * exp(-max(p.y + cameraPosition.y - 40.0, 0.0) / 80.0);
+        float sigma = 0.00022 * exp(-abs(p.y + cameraPosition.y - 60.0) / 35.0);
         float wd;
         float vis = shadowVis(p, Ls, wd);
         vec3 S = sigma * (eLight * vis * ph + vec3(0.02, 0.015, 0.03));
