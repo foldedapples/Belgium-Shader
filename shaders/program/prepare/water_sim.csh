@@ -76,8 +76,31 @@ void main() {
     state.simCenter.w = 0.0;
     return;
     #endif
+    // The field belongs to one dimension: entering another starts from a flat, inactive field
+    // (no Overworld ripples showing up in the Nether or the End).
+    #if defined WORLD_NETHER
+    const int DIM = 2;
+    #elif defined WORLD_END
+    const int DIM = 3;
+    #else
+    const int DIM = 1;
+    #endif
+    if (state.simFlags.y != DIM) {
+        state.simFlags = ivec4(0, DIM, 0, 0);
+        state.simCenter.w = 0.0;
+        state.simCellsLast.z = 0;
+        state.playerLast.w = 0.0;
+        state.vehicleLast.w = 0.0;
+    }
+
+    bool bodyInWater = feetInWater || isEyeInWater == 1 || (isRiding && vehicleInWater);
+    // Sleep while nothing moves: no body in the water and no step last frame left a ripple above
+    // the threshold (the steps set simFlags.x). No dispatch work then, and no time accumulates.
+    bool awake = bodyInWater || state.simFlags.x != 0;
+    state.simFlags.x = 0;
+
     float dt = clamp(frameTime, 0.0, 0.1);
-    float acc = state.simAccumulator + dt;
+    float acc = awake ? state.simAccumulator + dt : 0.0;
     int steps = min(int(acc / SIM_DT), 4);
     acc -= float(steps) * SIM_DT;
     acc = min(acc, SIM_DT);
@@ -265,6 +288,8 @@ void main() {
         float D = STEP == 0 ? disturbance(xz) : 0.0;
         next = clamp(next + D, -0.6, 0.6);
         prevOut = h + D;
+        // Keep the simulation awake while any cell still moves (all writers store the same value).
+        if (abs(next) > 2e-4 || abs(next - h) > 2e-5) state.simFlags.x = 1;
     }
     vec4 outv = vec4(next, prevOut, 0.0, 0.0);
     if (parity == 0) imageStore(waterSimB, t, outv);

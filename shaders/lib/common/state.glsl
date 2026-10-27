@@ -25,6 +25,7 @@ layout(std430, binding = 0) buffer MeridianState {
     vec4  vehicleLast;         // prepare (water sim bookkeeping): vehicle at the latest stepped frame (as playerLast), w valid
     ivec4 simCells;            // prepare (water sim bookkeeping): xy domain centre cell now, zw centre cell at the previous stepped frame
     ivec4 simCellsLast;        // prepare (water sim bookkeeping): xy centre cell at the latest stepped frame, z valid
+    ivec4 simFlags;            // water sim: x field still moving (set by the steps), y dimension the field belongs to (+1)
     ivec4 exposureInfo;        // composite (exposure pass): x frameCounter of the last update, y valid
 } state;
 
