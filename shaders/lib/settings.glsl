@@ -90,9 +90,12 @@ const float shadowDistance = 160.0; // [96.0 128.0 160.0 192.0 224.0 256.0]
 
 /*---------------------------------------------------------------- Clouds */
 #define VOLUMETRIC_CLOUDS // Volumetric Clouds
-#define CLOUD_QUALITY 2 // [0 1 2 3]
+#define CLOUD_QUALITY 2 // [0 1 2 3 4]
 #define CLOUD_RES 2 // [1 2 4]
-#define CLOUD_COVERAGE 0.45 // [0.2 0.3 0.4 0.45 0.5 0.6 0.7 0.8]
+#define CLOUD_COVERAGE 0.45 // [0.1 0.2 0.3 0.4 0.45 0.5 0.6 0.7 0.8]
+#define CLOUD_DENSITY 1.0 // [0.5 0.75 1.0 1.25 1.5 2.0]
+#define WEATHER_CLOUDS // Weather-Based Clouds
+#define CUMULONIMBUS // Storm Clouds
 #define CLOUD_ALTITUDE 1400 // [800 1000 1200 1400 1700 2000 2500]
 #define CLOUD_SPEED 1.0 // [0.0 0.25 0.5 1.0 1.5 2.0 3.0]
 #define CIRRUS_CLOUDS // Cirrus Clouds

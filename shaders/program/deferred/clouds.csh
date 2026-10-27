@@ -6,9 +6,12 @@
 // offset inside each low-resolution pixel, so the temporal accumulation converges to a smooth,
 // higher-resolution result. Empty space is crossed with long steps using the cheap weather map,
 // dense space with short steps; the march stops when transmittance is below 1 %.
-// Lighting: sun and moon via a short light march, multiple scattering by the octave
-// approximation (Wrenninge et al. 2013), dual-lobe phase for silver linings, sky ambient from
-// the SH sky projection (brighter at cloud tops), and aerial perspective towards the horizon.
+// Lighting: sun and moon via a short light march (each only while it matters), multiple
+// scattering by the octave approximation (Wrenninge et al. 2013) with a depth build-up for the
+// higher octaves, dual-lobe phase for silver linings, sky ambient from the SH sky projection
+// shaded by the cloud above each sample (dark cumulonimbus interiors), lightning, and aerial
+// perspective towards the horizon. The density model and weather map are in
+// lib/clouds/clouds_common.glsl.
 
 #include "/lib/settings.glsl"
 #include "/lib/common/uniforms.glsl"
@@ -40,24 +43,33 @@ uniform sampler2D depthtex1;
 layout(rgba16f) uniform writeonly image2D cloudMarch;
 layout(r32f) uniform writeonly image2D cloudDist;
 
+// Quality tiers. Low: no edge erosion, short light march; Cinematic: long marches, every light
+// sample at full detail. All tiers use the same scattering octaves so brightness matches.
 #if CLOUD_QUALITY == 0
-const int PRIMARY_STEPS = 20; const int LIGHT_STEPS = 4;
+const int PRIMARY_STEPS = 20; const int LIGHT_STEPS = 4; const int PRIMARY_LOD = 1; const int LIGHT_DETAIL = 1;
 #elif CLOUD_QUALITY == 1
-const int PRIMARY_STEPS = 36; const int LIGHT_STEPS = 6;
+const int PRIMARY_STEPS = 36; const int LIGHT_STEPS = 6; const int PRIMARY_LOD = 2; const int LIGHT_DETAIL = 2;
 #elif CLOUD_QUALITY == 2
-const int PRIMARY_STEPS = 56; const int LIGHT_STEPS = 7;
+const int PRIMARY_STEPS = 56; const int LIGHT_STEPS = 7; const int PRIMARY_LOD = 2; const int LIGHT_DETAIL = 2;
+#elif CLOUD_QUALITY == 3
+const int PRIMARY_STEPS = 96; const int LIGHT_STEPS = 9; const int PRIMARY_LOD = 2; const int LIGHT_DETAIL = 3;
 #else
-const int PRIMARY_STEPS = 96; const int LIGHT_STEPS = 9;
+const int PRIMARY_STEPS = 128; const int LIGHT_STEPS = 12; const int PRIMARY_LOD = 2; const int LIGHT_DETAIL = 12;
 #endif
 
+// Optical depth towards the light: geometrically growing steps (60 m, x1.6). The first few
+// samples stay within a few hundred metres of the column, so they reuse its weather; the first
+// LIGHT_DETAIL samples use the full shape, the far ones the one-fetch shape.
 float lightOpticalDepth(vec3 p, vec3 l, CloudWeather w) {
     float od = 0.0;
     float step = 60.0;
     vec3 q = p;
+    CloudWeather wq = w;
     for (int i = 0; i < LIGHT_STEPS; i++) {
         q += l * step;
-        CloudWeather wq = cloudWeatherAt(q.xz);
-        float d = cloudDensity(q, wq, i < 2);
+        if (q.y - 62.0 > cloudTop()) break;
+        if (i >= 3) wq = cloudWeatherAt(q.xz);
+        float d = cloudDensity(q, wq, i < LIGHT_DETAIL ? 1 : 0);
         od += cloudExtinction(d, wq.type) * step;
         step *= 1.6;
     }
@@ -68,12 +80,18 @@ float lightOpticalDepth(vec3 p, vec3 l, CloudWeather w) {
 // and c^i anisotropy. The truncated series underestimates the energy that diffuses through a thick
 // cloud (its lit side should approach albedo * E / pi); the factor 2 restores that level, which
 // was checked against the sunlit-cumulus brightness in the preview harness.
+//
+// Multiply scattered light needs some depth to build up: just inside the sunlit surface there is
+// little of it, which is what makes the folds of a cumulus read as rounded volumes instead of
+// flat white cut-outs (the "powder" darkening of sunward edges). Applied to the higher octaves
+// only, so thin cloud keeps its single-scattered silver lining.
 float scatterOctaves(float odLight, float cosTheta, float odView) {
     float s = 0.0;
     float a = 1.0, b = 1.0, c = 1.0;
+    float buildUp = 1.0 - 0.6 * exp(-odLight * 1.5);
     for (int i = 0; i < 4; i++) {
         float ph = mix(phaseHG(cosTheta, -0.2 * c), phaseHG(cosTheta, 0.82 * c), 0.62);
-        s += a * ph * exp(-b * odLight);
+        s += a * ph * exp(-b * odLight) * (i == 0 ? 1.0 : buildUp);
         a *= 0.6; b *= 0.32; c *= 0.55;
     }
     return s * 2.0;
@@ -98,11 +116,11 @@ void main() {
 
     float camAlt = cameraPosition.y - 62.0;
     vec3 ro = vec3(0.0, PLANET_RADIUS + camAlt, 0.0);
-    float rBase = PLANET_RADIUS + CLOUD_BASE, rTop = PLANET_RADIUS + cloudTop();
+    float rBase = PLANET_RADIUS + cloudShellBase(), rTop = PLANET_RADIUS + cloudTop();
     vec2 hitTop = raySphere(ro, dir, rTop);
     vec2 hitBase = raySphere(ro, dir, rBase);
     float tStart, tEnd;
-    if (camAlt < CLOUD_BASE) {
+    if (camAlt < cloudShellBase()) {
         // Below the layer: enter at the base, leave at the top (skip rays that hit the ground first).
         if (hitBase.y < 0.0) { imageStore(cloudMarch, px, vec4(0, 0, 0, 1)); imageStore(cloudDist, px, vec4(1e6)); return; }
         vec2 hitPlanet = raySphere(ro, dir, PLANET_RADIUS);
@@ -123,6 +141,11 @@ void main() {
     float rCloud = PLANET_RADIUS + CLOUD_BASE + 800.0;
     vec3 eSun = L.sunIllum * transmittanceToTop(rCloud, L.sunDir.y);
     vec3 eMoon = L.moonIllum * transmittanceToTop(rCloud, L.moonDir.y);
+    // Each light gets its own light march only when it matters: a daytime moon adds < 0.2 % to
+    // sunlight, and the sun is below the horizon all night, yet both used to be marched for every
+    // lit sample.
+    bool moonLit = maxOf(eMoon) > 1e-6 && luminance(eMoon) > 0.002 * luminance(eSun);
+    bool sunLit = maxOf(eSun) > 1e-6 && luminance(eSun) > 0.002 * luminance(eMoon);
     vec3 ambTop = skyIrradiance(vec3(0.0, 1.0, 0.0)) * PI;
     vec3 ambBottom = skyIrradiance(vec3(0.0, -1.0, 0.0)) * PI + ambTop * 0.15;
     float cosS = dot(dir, L.sunDir), cosM = dot(dir, L.moonDir);
@@ -153,7 +176,9 @@ void main() {
         vec3 wp = vec3(camWorld.x + dir.x * t, h + 62.0, camWorld.z + dir.z * t);
         CloudWeather w = cloudWeatherAt(wp.xz);
         if (!inCloud) {
-            float probe = w.coverage > 0.02 ? cloudDensity(wp, w, false) : 0.0;
+            // Same shape as the fine samples minus erosion (which only removes density), so the
+            // probe never steps over a cloud the fine march would see.
+            float probe = w.coverage > 0.02 ? cloudDensity(wp, w, 1) : 0.0;
             if (probe > 0.0) {
                 inCloud = true;
                 emptyRun = 0;
@@ -163,16 +188,21 @@ void main() {
             t += coarse;
             continue;
         }
-        float d = cloudDensity(wp, w, true);
+        float d = cloudDensity(wp, w, PRIMARY_LOD);
         float dt = fine;
         if (d > 0.0) {
             emptyRun = 0;
             float sigma = cloudExtinction(d, w.type);
-            float h01 = saturate((h - CLOUD_BASE) / (cloudTop() - CLOUD_BASE));
-            float odS = lightOpticalDepth(wp, L.sunDir, w);
-            vec3 light = eSun * scatterOctaves(odS, cosS, 0.0);
-            if (maxOf(eMoon) > 1e-6) light += eMoon * scatterOctaves(lightOpticalDepth(wp, L.moonDir, w), cosM, 0.0);
-            vec3 amb = mix(ambBottom, ambTop, h01) * INV_4PI * mix(0.55, 1.0, h01);
+            float h01 = saturate((h - w.base) / (w.top - w.base));
+            float odS = sunLit ? lightOpticalDepth(wp, L.sunDir, w) : 0.0;
+            vec3 light = sunLit ? eSun * scatterOctaves(odS, cosS, 0.0) : vec3(0.0);
+            if (moonLit) light += eMoon * scatterOctaves(lightOpticalDepth(wp, L.moonDir, w), cosM, 0.0);
+            // Sky light from above is shaded by the cloud over the sample: with multiple scattering
+            // it diffuses down gently, ~0.6 at the base of a 2 km cumulus (the old fixed 0.55),
+            // ~0.9 under thin stratus, ~0.13 at the base of a 9 km cumulonimbus, which gives storm
+            // towers their dark interiors without greying fair-weather clouds.
+            float skyAo = max(exp(-2.55e-4 * (w.top - h) * sqrt(w.coverage) * CLOUD_DENSITY), 0.1);
+            vec3 amb = mix(ambBottom, ambTop, h01) * INV_4PI * mix(skyAo, 1.0, h01 * h01);
             #ifdef LIGHTNING_FLASH
             // Lightning inside or below the storm: the cloud glows from within, strongest low down.
             amb += vec3(0.7, 0.75, 1.0) * lightningBoltPosition.w * 40.0 * (1.0 - h01) * INV_4PI;
@@ -195,23 +225,29 @@ void main() {
     if (hc.y > 0.0 && (depth >= 1.0)) {
         float tc = camAlt < CIRRUS_ALTITUDE ? hc.y : hc.x;
         vec3 pc = ro + dir * tc;
-        vec2 xz = cameraPosition.xz + dir.xz * tc - state.cloudOffset.zw;
-        vec2 wdir = windDirection();
-        // Gentle stretch along the wind (1.4x) avoids the repeated-streak look of strong stretching.
-        mat2 align = mat2(wdir.x, -wdir.y, wdir.y, wdir.x);
-        vec2 q = align * xz / vec2(9000.0, 6300.0);
+        vec2 worldXZ = cameraPosition.xz + dir.xz * tc;
+        vec2 xz = worldXZ - state.cloudOffset.zw;
+        // Streaks aligned with the mean wind direction (36.9 degrees, a Pythagorean rotation) and
+        // stretched 1.33x along it. Rational cos/sin and tiles of CLOUD_WRAP / (5 m) keep the
+        // pattern periodic over the offset wrap; the old wind-following rotation and 9000 / 6300 m
+        // tiles made the cirrus jump whenever the offset wrapped (and rotated the pattern about
+        // the world origin as the wind turned).
+        const mat2 ALIGN = mat2(0.8, -0.6, 0.6, 0.8);
+        vec2 q = (ALIGN * xz) * (vec2(3.0, 4.0) / (CLOUD_WRAP / 5.0));
         // The noise texture has no mipmaps: octaves finer than the pixel footprint would alias into
         // sparkling streaks near the horizon (seen in game with an earlier pack), so each octave
         // fades to its mean once a texel is smaller than ~2 pixels.
         float footprint = tc * pixelAngularSize() * float(CLOUD_RES) / max(abs(dir.y), 0.03);   // metres
-        float texel = 6300.0 / 512.0;                                                         // metres per texel, octave 1
+        float texel = CLOUD_WRAP / 20.0 / 512.0;                                              // metres per texel, octave 1
         float f1 = 1.0 - smoothstep(1.0, 3.0, footprint / texel);
-        float f2 = 1.0 - smoothstep(1.0, 3.0, footprint * 3.1 / texel);
-        float f3 = 1.0 - smoothstep(1.0, 3.0, footprint * 7.3 / texel);
+        float f2 = 1.0 - smoothstep(1.0, 3.0, footprint * 3.0 / texel);
+        float f3 = 1.0 - smoothstep(1.0, 3.0, footprint * 7.0 / texel);
         float n = mix(0.5, texture(noise2dTex, q).r, f1) * 0.6
-                + mix(0.5, texture(noise2dTex, q * 3.1 + 0.21).g, f2) * 0.3
-                + mix(0.5, texture(noise2dTex, q * 7.3).a, f3) * 0.1;
-        float cov = 0.45 + 0.25 * rainStrength;
+                + mix(0.5, texture(noise2dTex, q * 3.0 + 0.21).g, f2) * 0.3
+                + mix(0.5, texture(noise2dTex, q * 7.0).a, f3) * 0.1;
+        // Cirrus run ahead of weather systems: more of it where the large-scale field is lower
+        // pressure, little under settled high pressure (mean 0.45 as before).
+        float cov = 0.3 + 0.3 * cloudSystems(worldXZ - state.weatherOffset.xy) + 0.25 * rainStrength;
         float od = saturate((n - (1.0 - cov)) * 2.5) * 0.35 * CIRRUS_AMOUNT;
         float fade = saturate(dir.y * 8.0);
         od *= fade;

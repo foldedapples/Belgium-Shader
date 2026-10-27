@@ -92,8 +92,8 @@ void main() {
         // Clouds in front of terrain (mountains in the clouds, LOD terrain beyond them).
         #ifdef VOLUMETRIC_CLOUDS
         float camAlt = cameraPosition.y - 62.0;
-        float baseY = 62.0 + CLOUD_BASE;
-        bool cloudInFront = camAlt > CLOUD_BASE || (dir.y > 0.0 && (baseY - cameraPosition.y) / dir.y < dist);
+        float baseY = 62.0 + cloudShellBase();
+        bool cloudInFront = camAlt > cloudShellBase() || (dir.y > 0.0 && (baseY - cameraPosition.y) / dir.y < dist);
         if (cloudInFront) {
             vec4 c = sampleClouds(uv);
             color = color * c.a + c.rgb;

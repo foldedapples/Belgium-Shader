@@ -9,6 +9,16 @@
   Boat Wake Strength, Player Splash Strength; Simulation Quality moved into Ripple Simulation.
 * Fix: false splashes when a third-person camera dipped under the surface; water entry now uses
   the player's own feet and eye, not the camera.
+* Clouds: new weather map - ~40 km weather systems (clear highs, overcast lows), a domain-warped
+  cluster field (isolated groups to banks), convective instability - with per-column cloud type,
+  base and top (stratus, stratocumulus, cumulus, cumulonimbus). No visible tiling (the old map
+  repeated every 32.8 km); Coverage now tracks the share of sky (0.2 / 0.45 / 0.7 -> 0.22 /
+  0.47 / 0.68). Two-scale shape noise; formations drift slower than the clouds, so they evolve.
+* Clouds: sky light shaded by the cloud above (dark storm interiors), depth build-up of multiple
+  scattering, light marches skipped for a negligible sun or moon, Cinematic cloud quality.
+  Options: Cloud Density, Weather-Based Clouds, Storm Clouds; Cloud Quality, Resolution and
+  Cloud Shadows moved into the Volumetric Clouds screen. Cloud programs are disabled with clouds.
+* Fix: cirrus and cloud detail jumped when the wind offset wrapped / every hour.
 
 ## Unreleased (2026-10-26)
 

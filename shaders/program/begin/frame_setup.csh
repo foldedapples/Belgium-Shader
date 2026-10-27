@@ -71,7 +71,13 @@ void main() {
     vec4 co = state.cloudOffset;
     co.xy += wind * speed * dt;
     co.zw += wind * speed * 2.2 * dt;
-    // Keep the offsets bounded (noise repeats far beyond this) to preserve float precision.
+    // Keep the offsets bounded to preserve float precision. Every cloud noise repeats a whole
+    // number of times in 131072 m (lib/clouds/clouds_common.glsl, CLOUD_WRAP), so the wrap is
+    // invisible.
     co = mod(co + 65536.0, 131072.0) - 65536.0;
     state.cloudOffset = co;
+    // Cloud formations (the weather map) drift a little slower than the cloud elements, so
+    // clouds form and dissolve across a cluster instead of the pattern sliding rigidly.
+    vec2 wo = state.weatherOffset.xy + wind * speed * 0.8 * dt;
+    state.weatherOffset = vec4(mod(wo + 65536.0, 131072.0) - 65536.0, 0.0, 0.0);
 }

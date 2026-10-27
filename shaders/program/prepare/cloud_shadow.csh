@@ -25,12 +25,12 @@ void main() {
     CloudWeather w = cloudWeatherAt(xz);
     float od = 0.0;
     if (w.coverage > 0.02) {
-        float top = mix(CLOUD_TOP_LOW, CLOUD_TOP_STORM, w.type * thunderStrength);
+        // Through this column's own cloud (its type sets base and top).
         const int N = 10;
-        float dy = (top - CLOUD_BASE) / float(N);
+        float dy = (w.top - w.base) / float(N);
         for (int i = 0; i < N; i++) {
-            vec3 p = vec3(xz.x, 62.0 + CLOUD_BASE + (float(i) + 0.5) * dy, xz.y);
-            od += cloudExtinction(cloudDensity(p, w, false), w.type) * dy;
+            vec3 p = vec3(xz.x, 62.0 + w.base + (float(i) + 0.5) * dy, xz.y);
+            od += cloudExtinction(cloudDensity(p, w, 1), w.type) * dy;
         }
     }
     imageStore(cloudShadow, px, vec4(od));
