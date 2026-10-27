@@ -79,12 +79,13 @@ float cloudDensity(vec3 worldPos, CloudWeather w, bool detail) {
     if (profile <= 0.0) return 0.0;
 
     // Wind shear: higher parts lean downwind. The lean is a fixed slope along the current wind
-    // (0.3 .. 0.8 m per metre of height, stronger in storms). It used to be 0.35 * h01 times the
+    // (0.06 .. 0.18 m per metre of height, stronger in storms; 0.3 .. 0.8 slanted a 2 km cloud by
+    // up to 1.8 km, which read as long stretched streaks from below). It used to be 0.35 * h01 times the
     // wind displacement accumulated since loading, which grows without bound: after ~10 km of
     // drift a 220 m step in height sampled the noise 350 m away, so clouds leaned further every
     // minute until they sheared into flat streaks, and they jumped when the offset wrapped.
     vec3 p = worldPos;
-    p.xz -= state.cloudOffset.xy + windDirection() * ((alt - CLOUD_BASE) * (0.3 + 0.5 * windStrength()));
+    p.xz -= state.cloudOffset.xy + windDirection() * ((alt - CLOUD_BASE) * (0.06 + 0.12 * windStrength()));
     vec4 s = texture(cloudShapeTex, p / SHAPE_TILE * vec3(1.0, 1.6, 1.0));
     float fbm = s.g * 0.625 + s.b * 0.25 + s.a * 0.125;
     float shape = remapUnclamped(s.r, fbm - 1.0, 1.0, 0.0, 1.0);

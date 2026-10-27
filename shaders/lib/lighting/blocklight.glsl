@@ -12,11 +12,15 @@ vec4 fetchLight(ivec3 block) {
     return texelFetch(lightSamplerA, voxelIndex(block), 0);
 }
 
-// Trilinear filtering by hand (the volume is toroidal, the image clamps).
-vec4 sampleLightVolume(vec3 worldPos) {
-    vec3 p = worldPos - 0.5;
-    ivec3 b = ivec3(floor(p));
-    vec3 f = p - vec3(b);
+// Trilinear filtering by hand (the volume is toroidal, the image clamps). Takes a camera-relative
+// position: the volume is voxelised in unshifted integer world blocks (cameraPositionInt), while
+// cameraPosition is shifted by Iris in 30000-block steps, so world = cameraPosition + p put the
+// lookup in the wrong place beyond +-30000.
+vec4 sampleLightVolume(vec3 playerPos) {
+    vec3 p = cameraPositionFract + playerPos - 0.5;
+    ivec3 fl = ivec3(floor(p));
+    ivec3 b = cameraPositionInt + fl;
+    vec3 f = p - vec3(fl);
     vec4 c000 = fetchLight(b), c100 = fetchLight(b + ivec3(1, 0, 0));
     vec4 c010 = fetchLight(b + ivec3(0, 1, 0)), c110 = fetchLight(b + ivec3(1, 1, 0));
     vec4 c001 = fetchLight(b + ivec3(0, 0, 1)), c101 = fetchLight(b + ivec3(1, 0, 1));
@@ -41,11 +45,11 @@ vec3 blockLightAt(vec3 playerPos, vec3 normal, float blockLight) {
     vec3 defaultColor = blackbody(float(BLOCKLIGHT_TEMPERATURE));
     vec3 color = defaultColor;
     #ifdef COLORED_LIGHTING
-    vec3 worldPos = playerPos + cameraPosition + normal * 0.5;
-    ivec3 block = ivec3(floor(worldPos));
+    vec3 rel = playerPos + normal * 0.5;
+    ivec3 block = cameraPositionInt + ivec3(floor(cameraPositionFract + rel));
     ivec3 origin = ivec3(state.lightVolumeOrigin.xyz);
     if (insideVolume(block, origin) && insideVolume(block + 1, origin)) {
-        vec4 v = sampleLightVolume(worldPos);
+        vec4 v = sampleLightVolume(rel);
         if (v.a > 1e-3) {
             vec3 c = v.rgb / max(v.a, 1e-4);
             c /= max(maxOf(c), 1e-4);

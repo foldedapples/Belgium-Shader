@@ -306,8 +306,9 @@ void main() {
     #elif DEBUG_VIEW == 11
     #ifdef COLORED_LIGHTING
     {
-        vec3 wp = playerPos + cameraPosition + gb.geoNormal * 0.5;
-        dbg = insideVolume(ivec3(floor(wp)), ivec3(state.lightVolumeOrigin.xyz)) ? sampleLightVolume(wp).rgb : vec3(0.1, 0.0, 0.0);
+        vec3 rel = playerPos + gb.geoNormal * 0.5;
+        ivec3 blk = cameraPositionInt + ivec3(floor(cameraPositionFract + rel));
+        dbg = insideVolume(blk, ivec3(state.lightVolumeOrigin.xyz)) ? sampleLightVolume(rel).rgb : vec3(0.1, 0.0, 0.0);
     }
     #endif
     #elif DEBUG_VIEW == 12
