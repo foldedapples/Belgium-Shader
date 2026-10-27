@@ -8,11 +8,11 @@ layout(std430, binding = 0) buffer MeridianState {
     float avgLogLuminance;     // composite (exposure pass)
     float simAccumulator;      // prepare (water sim): fixed-step time accumulator
     int   simParity;           // prepare (water sim): 0 = image A newest, 1 = image B newest
-    vec4  simCenter;           // prepare (water sim): xz domain centre, y water plane, w valid
-    vec4  playerPrev;          // prepare (water sim): xyz previous feet position, w in-water flag
-    vec4  simPrevCenter;       // prepare (water sim): domain centre of the previous frame (xz), w valid
+    vec4  simCenter;           // prepare (water sim): y water plane, w active (xz unused)
+    vec4  playerPrev;          // prepare (water sim): feet at the previous stepped frame (xz relative to simCells.zw), w in water
+    vec4  simPrevCenter;       // prepare (water sim): w = simCells.zw valid (xyz unused)
     ivec4 simInfo;             // prepare (water sim): x parity read by step 0, y steps this frame
-    vec4  vehiclePrev;         // prepare (water sim): xyz previous vehicle position, w valid
+    vec4  vehiclePrev;         // prepare (water sim): vehicle at the previous stepped frame (as playerPrev), w valid
     vec4  lightBasis[3];       // begin: light-space x, y, z axes (z = towards the light), w unused
     vec4  cascadeCenter[4];    // begin: per-cascade snapped light-space offset (xy), z texel size
     vec4  lightVolumeOrigin;   // begin: xyz voxel-volume origin (world block), w = frame valid
@@ -21,8 +21,10 @@ layout(std430, binding = 0) buffer MeridianState {
     vec4  skySH[9];            // prepare: sky irradiance / pi as order-2 SH (rgb)
     vec4  misc;                // x: splash energy, y: previous swimming flag, zw cloud-shadow map centre (prepare)
     ivec4 shadowAnchor;        // begin: xyz world block the light rotation pivots about, w = valid
-    vec4  playerLast;          // prepare (water sim bookkeeping): feet at the last stepped frame, w in water
-    vec4  vehicleLast;         // prepare (water sim bookkeeping): vehicle at the last stepped frame, w valid
+    vec4  playerLast;          // prepare (water sim bookkeeping): feet at the latest stepped frame (xz relative to simCellsLast.xy), w in water
+    vec4  vehicleLast;         // prepare (water sim bookkeeping): vehicle at the latest stepped frame (as playerLast), w valid
+    ivec4 simCells;            // prepare (water sim bookkeeping): xy domain centre cell now, zw centre cell at the previous stepped frame
+    ivec4 simCellsLast;        // prepare (water sim bookkeeping): xy centre cell at the latest stepped frame, z valid
 } state;
 
 #endif

@@ -42,11 +42,13 @@ float simHeight(ivec2 cell) {
     return state.simParity == 0 ? texelFetch(waterSimSamplerA, tx, 0).r : texelFetch(waterSimSamplerB, tx, 0).r;
 }
 
-// Gradient of the simulated height field, bilinearly interpolated between cell centres.
-vec2 simGradient(vec2 worldXZ) {
-    vec2 g = worldXZ / SIM_DX - 0.5;
-    ivec2 c = ivec2(floor(g));
-    vec2 f = g - vec2(c);
+// Gradient of the simulated height field at a camera-relative position, bilinearly interpolated
+// between cell centres (exact integer cells, lib/water/sim_common.glsl).
+vec2 simGradient(vec2 playerXZ) {
+    vec2 g = simLocal(playerXZ) - 0.5;
+    ivec2 cl = ivec2(floor(g));
+    vec2 f = g - vec2(cl);
+    ivec2 c = simCameraCell() + cl;
     float h00 = simHeight(c), h10 = simHeight(c + ivec2(1, 0)), h01 = simHeight(c + ivec2(0, 1)), h11 = simHeight(c + ivec2(1, 1));
     float hm0 = simHeight(c + ivec2(-1, 0)), h20 = simHeight(c + ivec2(2, 0));
     float h0m = simHeight(c + ivec2(0, -1)), h02 = simHeight(c + ivec2(0, 2));
@@ -82,9 +84,9 @@ void main() {
         #if defined WATER_SIM && !defined GBUF_HAND_WATER
         if (state.simCenter.w > 0.5) {
             float planeW = 1.0 - saturate(abs(worldPos.y - state.simCenter.y) - 0.6);
-            float w = planeW * simEdgeFade(worldPos.xz, state.simCenter.xz);
+            float w = planeW * simEdgeFade(simLocal(vPlayerPos.xz));
             // The simulation grid resolves wavenumbers up to pi / SIM_DX; filter at its typical one.
-            if (w > 0.0) grad += simGradient(worldPos.xz) * w * waveFilter(0.6 * PI / SIM_DX, footprint);
+            if (w > 0.0) grad += simGradient(vPlayerPos.xz) * w * waveFilter(0.6 * PI / SIM_DX, footprint);
         }
         #endif
         #ifdef RAIN_RIPPLES
