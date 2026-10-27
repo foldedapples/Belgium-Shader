@@ -114,6 +114,7 @@ const int MAT_CLAY           = 117;
 const int MAT_PACKED_ICE     = 118;
 const int MAT_PURPUR         = 119;
 const int MAT_DEEPSLATE      = 120;
+const int MAT_ORE            = 129;   // overworld, deepslate and nether ores
 const int MAT_BRICKS         = 121;
 const int MAT_PRISMARINE     = 122;
 const int MAT_WARPED_WART    = 123;

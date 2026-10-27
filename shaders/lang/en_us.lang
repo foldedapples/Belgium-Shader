@@ -109,6 +109,8 @@ option.PARALLAX_OCCLUSION.comment=Uses the resource pack's height maps to give s
 option.POM_DEPTH=Parallax Depth Amount
 option.POM_SAMPLES=Parallax Quality
 option.POM_SELF_SHADOW=Parallax Self-Shadowing
+option.EMISSIVE_ORES=Emissive Ores
+option.EMISSIVE_ORES.comment=Makes the mineral specks of ores glow faintly (built-in materials only; resource-pack emission is used as is). 0 = off, as in reality.
 option.EMISSION_STRENGTH=Emission Strength
 option.EMISSION_STRENGTH.comment=Brightness of glowing parts of textures.
 

@@ -43,7 +43,7 @@ vec4 fallbackSpecular(int id, vec3 albedo, float lightLevel) {
     else if (id == MAT_POLISHED)    { f0 = 10.0; smooth_ = 0.45 + 0.2 * lum; }
     else if (id == MAT_OBSIDIAN || id == MAT_CRYING_OBSIDIAN) { f0 = 12.0; smooth_ = 0.82; }
     else if (id == MAT_PURPUR || id == MAT_PRISMARINE) { f0 = 10.0; smooth_ = 0.4; }
-    else if (id == MAT_STONE || id == MAT_DEEPSLATE || id == MAT_BRICKS) { smooth_ = 0.18 + 0.15 * lum; b = 6.0; }
+    else if (id == MAT_STONE || id == MAT_DEEPSLATE || id == MAT_BRICKS || id == MAT_ORE) { smooth_ = 0.18 + 0.15 * lum; b = 6.0; }
     else if (id == MAT_BASALT || id == MAT_BLACKSTONE) { smooth_ = 0.25; b = 4.0; }
     else if (id == MAT_SAND)        { smooth_ = 0.10; b = 64.0; }
     else if (id == MAT_GRAVEL)      { smooth_ = 0.10; b = 50.0; }
@@ -83,6 +83,18 @@ vec4 fallbackSpecular(int id, vec3 albedo, float lightLevel) {
         emission = emissiveMask(albedo, 0.62);
     }
     emission *= lightLevel > 0.5 || isEmitter(id) ? 1.0 : 0.0;
+
+    // Optional glowing ores: only the mineral specks - saturated texels (diamond, emerald, lapis,
+    // copper, redstone) or bright pale ones (quartz, gold) - never the grey host rock or the dark
+    // red of netherrack around nether ores.
+    if (id == MAT_ORE && EMISSIVE_ORES > 0.0) {
+        float mx = maxOf(albedo), mn = minOf(albedo);
+        float sat = mx > 1e-3 ? (mx - mn) / mx : 0.0;
+        float darkRed = (albedo.r >= albedo.g && albedo.r >= albedo.b && mx < 0.55) ? 1.0 : 0.0;
+        float speck = max(smoothstep(0.30, 0.50, sat) * smoothstep(0.30, 0.50, mx) * (1.0 - darkRed),
+                          smoothstep(0.66, 0.82, mx));
+        emission = max(emission, speck * 0.35 * EMISSIVE_ORES);
+    }
 
     return vec4(smooth_, f0 / 255.0, b / 255.0, emission > 0.004 ? emission * 254.0 / 255.0 : 1.0);
 }

@@ -54,6 +54,7 @@ const float shadowDistance = 160.0; // [96.0 128.0 160.0 192.0 224.0 256.0]
 #define POM_DEPTH 0.25 // [0.05 0.1 0.15 0.2 0.25 0.3 0.4]
 #define POM_SAMPLES 32 // [8 16 24 32 48 64]
 #define POM_SELF_SHADOW // Parallax Self-Shadowing
+#define EMISSIVE_ORES 0.0 // [0.0 0.25 0.5 1.0 1.5]
 #define EMISSION_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0 3.0 4.0]
 
 /*---------------------------------------------------------------- Reflections */
