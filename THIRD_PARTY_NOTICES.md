@@ -53,3 +53,11 @@ the License.
 
 Modifications: transcribed to this pack's GLSL conventions (function name, saturation of the
 result in `tonemap()`).
+
+## Oklab
+
+`lib/post/oklab.glsl` uses the Oklab colour space by Björn Ottosson
+(https://bottosson.github.io/posts/oklab/), whose author states: "The code is available in public
+domain, feel free to use it any way you please. It is also available under an MIT license". Only
+the published conversion matrices are used; the tone mapper, gamut compression and vibrance built
+on it are this pack's own.

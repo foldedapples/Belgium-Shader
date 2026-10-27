@@ -34,6 +34,19 @@
   low-resolution march instead of being accumulated and stretched at low resolution.
   tools/cloud_preview.py renders previews from the same model; debug views 25-27 show the cloud
   weather map, lighting and temporal history.
+* Colour (in-game report: dull, grey, washed out). Causes: the default tone curve had a mid-tone
+  contrast of 1.0 (film / ACES ~1.3-1.4) and lifted shadows (1/8 grey at 0.0174, about twice a
+  film curve), with none of a film curve's mid-tone saturation; and the colour profiles' split
+  toning was added in linear display space, which lifted black to a blue-grey (Cinematic: sRGB
+  ~15 % blue) and swung the hue of shaded colours by 10-25 degrees. New default tone mapper,
+  Belgium Filmic: contrast 1.28, middle grey kept at 0.18, deeper shadows, fuller highlights, hue
+  kept exactly (largest channel), a film-like chroma gain in the mid-tones in Oklab, gamut
+  compression by chroma instead of clipping, and colours go white only far beyond white (orange
+  light stays coloured to 3 stops over middle grey). Vibrance now works in Oklab, gentler on
+  foliage and highlights; split toning is a per-channel gain. Profiles are milder (the tone
+  mapper supplies the contrast). The old curve stays available as Meridian Filmic (flat). Night
+  exposure key 0.05 -> 0.065 so average night brightness is unchanged with the darker toe.
+  Debug views 28-30: colour saturation, tone mapping only, bloom contribution.
 * Stars: subtle twinkling (atmospheric scintillation) per catalogue star, stronger towards the
   horizon (airmass^1.5), weaker for faint stars, log-normal so brightness is kept on average and
   no star drops out; the Milky Way and the End sky do not twinkle. Options: Star Twinkling,

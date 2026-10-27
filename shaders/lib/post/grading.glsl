@@ -1,11 +1,15 @@
 #ifndef MERIDIAN_GRADING
 #define MERIDIAN_GRADING
 
+#include "/lib/post/oklab.glsl"
+
 // Colour profiles (COLOR_PROFILE): 0 Natural, 1 Vibrant (default), 2 Cinematic, 3 Realistic,
 // 4 Fantasy, 5 Custom. Grading happens in two places: white balance and scene-referred saturation before
-// tone mapping, contrast/vibrance/split-tone after it. "Vibrance" raises the saturation of muted
-// colours more than of already vivid ones, so grass and skies gain richness while saturated
-// light sources and dyed blocks do not clip.
+// tone mapping, contrast/vibrance/split-tone after it. "Vibrance" raises the chroma of muted
+// colours more than of already vivid ones (in Oklab, so hues do not drift), less for foliage
+// hues (no neon grass) and not in highlights. The profiles are milder than before because the
+// default tone mapper (Belgium filmic) now supplies the contrast and mid-tone saturation that the
+// flat old curve lacked.
 
 struct Grade {
     float saturation;   // scene-referred, applied before tone mapping
@@ -21,16 +25,17 @@ Grade currentGrade() {
     g.saturation = 1.0; g.vibrance = 0.0; g.contrast = 1.0; g.whiteBalance = 6500.0;
     g.shadowTint = vec3(0.0); g.highlightTint = vec3(0.0);
     #if COLOR_PROFILE == 1
-    g.saturation = 1.06; g.vibrance = 0.18; g.contrast = 1.06;
+    g.saturation = 1.03; g.vibrance = 0.15; g.contrast = 1.03;
     #elif COLOR_PROFILE == 2
-    g.saturation = 0.96; g.vibrance = 0.05; g.contrast = 1.12;
+    g.saturation = 0.95; g.vibrance = 0.04; g.contrast = 1.08;
     g.shadowTint = vec3(-0.012, 0.004, 0.018); g.highlightTint = vec3(0.020, 0.006, -0.016);
     #elif COLOR_PROFILE == 3
-    // Photographic: a touch of contrast and vibrance, slightly cooler shadows, no stylisation.
-    g.saturation = 0.98; g.vibrance = 0.08; g.contrast = 1.04;
+    // Photographic: the tone mapper's own contrast and colour, a little vibrance, slightly cooler
+    // shadows, no stylisation.
+    g.saturation = 1.0; g.vibrance = 0.06; g.contrast = 1.0;
     g.shadowTint = vec3(-0.004, 0.0, 0.006);
     #elif COLOR_PROFILE == 4
-    g.saturation = 1.15; g.vibrance = 0.32; g.contrast = 1.04;
+    g.saturation = 1.12; g.vibrance = 0.28; g.contrast = 1.03;
     g.shadowTint = vec3(0.010, -0.006, 0.020); g.highlightTint = vec3(0.012, 0.010, -0.004);
     #elif COLOR_PROFILE == 5
     g.saturation = CUSTOM_SATURATION; g.vibrance = CUSTOM_VIBRANCE; g.contrast = CUSTOM_CONTRAST;
@@ -70,13 +75,21 @@ vec3 applyDisplayGrade(vec3 c, Grade g) {
     vec3 p = sqrt(saturate(c));
     p += (g.contrast - 1.0) * (p - 0.45) * (4.0 * p * (1.0 - p));
     c = p * p;
-    // Vibrance: boost scaled by how unsaturated the colour is.
-    float mx = maxOf(c), mn = minOf(c);
-    float sat = mx > 1e-4 ? (mx - mn) / mx : 0.0;
+    // Vibrance in Oklab: muted colours gain the most (none above chroma 0.18), foliage hues
+    // (~135 degrees) half as much, highlights none.
+    if (g.vibrance != 0.0) {
+        vec3 lab = linearToOklab(c);
+        float chroma = length(lab.yz);
+        float hue = degrees(atan(lab.z, lab.y));
+        float foliage = exp(-pow((hue - 135.0) / 22.0, 2.0));
+        float boost = g.vibrance * (1.0 - smoothstep(0.0, 0.18, chroma)) * (1.0 - 0.5 * foliage) * (1.0 - smoothstep(0.85, 1.0, lab.x));
+        c = oklabToDisplay(vec3(lab.x, lab.yz * (1.0 + boost)));
+    }
     float l = luminance(c);
-    c = mix(vec3(l), c, 1.0 + g.vibrance * (1.0 - sat) * (1.0 - sat));
-    // Split toning by luminance.
-    c += g.shadowTint * (1.0 - smoothstep(0.0, 0.4, l)) + g.highlightTint * smoothstep(0.35, 1.0, l);
+    // Split toning by luminance, as a gain per channel: black stays black. The tint used to be
+    // added, which lifted black to (0, 0.004, 0.018) in Cinematic (a blue-grey veil over every
+    // shadow, ~15 % in sRGB) and swung the hue of shaded grass by 10-25 degrees in Realistic.
+    c *= 1.0 + 5.0 * (g.shadowTint * (1.0 - smoothstep(0.0, 0.4, l)) + g.highlightTint * smoothstep(0.35, 1.0, l));
     return saturate(c);
 }
 

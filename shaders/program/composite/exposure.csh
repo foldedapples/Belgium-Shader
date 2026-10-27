@@ -56,9 +56,12 @@ void main() {
     if (tid == 0u) {
         float avgLog = sLog[0] / max(sW[0], 1e-6);
         float avgL = exp2(avgLog);
-        // Key value: ~0.18 for daylight scenes, falling to ~0.05 in the dark so night stays night
-        // (a fixed key would expose moonlight like daylight). Range: noon to moonless night.
-        float key = mix(0.05, 0.18, smoothstep(-4.0, -0.3, log2(avgL) * 0.30103));
+        // Key value: ~0.18 for daylight scenes, falling to ~0.065 in the dark so night stays night
+        // (a fixed key would expose moonlight like daylight). Range: noon to moonless night. The
+        // dark key was 0.05 with the flat old tone curve; the filmic toe (lib/post/tonemap.glsl)
+        // displays 0.065 as the old curve displayed 0.05, so average night brightness is unchanged
+        // while the deepest shadows are now darker.
+        float key = mix(0.065, 0.18, smoothstep(-4.0, -0.3, log2(avgL) * 0.30103));
         float target = key / max(avgL, 1e-6);
         target = clamp(target, 0.004, 512.0);
         #ifdef WORLD_END

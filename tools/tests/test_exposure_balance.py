@@ -26,7 +26,7 @@ def falloff(level):
     return l ** 2.6 * (1.0 if l >= 0.5 else (l / 0.5) ** 2 * (3 - 2 * l / 0.5))
 
 
-def meter(pixels, sky_weight, floor, key_dim=0.05, key_bright=0.18):
+def meter(pixels, sky_weight, floor, key_dim=0.065, key_bright=0.18):
     num = den = 0.0
     for lum, sky, w in pixels:
         w = w * (sky_weight if sky else 1.0)

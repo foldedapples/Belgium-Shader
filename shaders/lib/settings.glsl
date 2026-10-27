@@ -7,7 +7,7 @@
 
 /*---------------------------------------------------------------- General / colour */
 #define COLOR_PROFILE 1 // [0 1 2 3 4 5]
-#define TONEMAP 0 // [0 1 2]
+#define TONEMAP 0 // [0 1 2 3]
 #define EXPOSURE_BIAS 0.0 // [-2.0 -1.5 -1.0 -0.5 0.0 0.5 1.0 1.5 2.0]
 #define AUTO_EXPOSURE // Automatic Exposure
 #define ADAPTATION_SPEED 1.0 // [0.25 0.5 1.0 2.0 4.0]
@@ -175,7 +175,7 @@ const float shadowDistance = 160.0; // [96.0 128.0 160.0 192.0 224.0 256.0]
 #else
 #define NOISE_FRAME frameCounter
 #endif
-#define DEBUG_VIEW 0 // [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27]
+#define DEBUG_VIEW 0 // [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30]
 
 /*---------------------------------------------------------------- Derived switches */
 // Iris's option scanner lists a toggle only when some #ifdef/#ifndef tests it directly, so
