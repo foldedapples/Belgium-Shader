@@ -182,6 +182,9 @@ void main() {
 
     #if DEBUG_VIEW == 15 && defined WORLD_OVERWORLD && defined VOLUMETRIC_CLOUDS
     color = vec3(1.0 - sampleClouds(uv).a);
+    #elif DEBUG_VIEW >= 25 && DEBUG_VIEW <= 27 && defined WORLD_OVERWORLD && defined VOLUMETRIC_CLOUDS
+    // Cloud diagnostics written by the cloud passes (program/deferred/clouds.csh).
+    color = sampleClouds(uv).rgb;
     #endif
     outColor = vec4(hdrSafe(color), 1.0);
 }

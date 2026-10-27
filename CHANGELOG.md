@@ -19,6 +19,21 @@
   Options: Cloud Density, Weather-Based Clouds, Storm Clouds; Cloud Quality, Resolution and
   Cloud Shadows moved into the Volumetric Clouds screen. Cloud programs are disabled with clouds.
 * Fix: cirrus and cloud detail jumped when the wind offset wrapped / every hour.
+* Clouds, second rebuild (in-game report: smooth grey masses over most of the sky, odd openings,
+  little detail). Cause: the shape noise was 0.69 +- 0.14 and was thresholded against coverage
+  0.4-0.85, so every cloud group became one solid mass. Now coverage, sky cover, type, size,
+  thickness and density are separate controls; the shape noise (two cell scales, small humilis
+  and large congestus) is equalised so coverage is the cloud fraction, and a per-type coverage
+  profile makes flat bases and narrowing domes. Partly cloudy skies hold 308 distinct clouds per
+  15 km view instead of 40, the largest connected mass 46 % of the cloud instead of 86 %; sky cover
+  follows the setting (0.21 / 0.47 / 0.70 for 0.2 / 0.45 / 0.7). Each Minecraft day has its own
+  weather (some clearer, some cloudier, eased in over ~90 s). Cumulonimbus anvils in thunder,
+  40-80 m billows that fade with distance (no shimmering edges), thinner and sparser cirrus
+  strands. Shadowed cloud sides had half the sky light they should (E / 4 pi instead of E / 2 pi
+  per hemisphere) and looked muddy grey. Clouds are rebuilt at full resolution from the jittered
+  low-resolution march instead of being accumulated and stretched at low resolution.
+  tools/cloud_preview.py renders previews from the same model; debug views 25-27 show the cloud
+  weather map, lighting and temporal history.
 * Stars: subtle twinkling (atmospheric scintillation) per catalogue star, stronger towards the
   horizon (airmass^1.5), weaker for faint stars, log-normal so brightness is kept on average and
   no star drops out; the Milky Way and the End sky do not twinkle. Options: Star Twinkling,

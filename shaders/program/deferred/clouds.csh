@@ -29,7 +29,7 @@
 #include "/lib/clouds/clouds_common.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
-#if CLOUD_RES == 1
+#if CLOUD_RES == 1 || defined(CLOUD_RECONSTRUCT)
 const vec2 workGroupsRender = vec2(1.0, 1.0);
 #elif CLOUD_RES == 2
 const vec2 workGroupsRender = vec2(0.5, 0.5);
@@ -70,7 +70,7 @@ float lightOpticalDepth(vec3 p, vec3 l, CloudWeather w) {
         if (q.y - 62.0 > cloudTop()) break;
         if (i >= 3) wq = cloudWeatherAt(q.xz);
         float d = cloudDensity(q, wq, i < LIGHT_DETAIL ? 1 : 0);
-        od += cloudExtinction(d, wq.type) * step;
+        od += cloudExtinction(d) * step;
         step *= 1.6;
     }
     return od;
@@ -150,7 +150,7 @@ void main() {
     vec3 ambBottom = skyIrradiance(vec3(0.0, -1.0, 0.0)) * PI + ambTop * 0.15;
     float cosS = dot(dir, L.sunDir), cosM = dot(dir, L.moonDir);
 
-    // Two-rate march (mirrored and tested by tools/tests/test_cloud_march.py): coarse steps through
+    // Two-rate march: coarse steps through
     // empty air; on the first coarse sample with cloud, step back one coarse step and continue with
     // fine steps; return to coarse steps after 6 empty fine samples. Fronts are found within one
     // fine step and thick clouds get at least 4 samples, so low-elevation rays (tens of km through
@@ -160,6 +160,7 @@ void main() {
     float coarse = clamp(span / float(PRIMARY_STEPS), 60.0, 600.0);
     float fine = coarse * 0.25;
     float jitter = interleavedGradient(vec2(px) + float(NOISE_FRAME % 32) * 7.17);
+    float pixelSize = pixelAngularSize() * float(CLOUD_RES);    // radians per march pixel
     float t = tStart + coarse * jitter;
     vec3 T = vec3(1.0);
     vec3 scatter = vec3(0.0);
@@ -167,6 +168,9 @@ void main() {
     vec3 camWorld = cameraPosition;
     bool inCloud = false;
     int emptyRun = 0;
+    #if DEBUG_VIEW == 26
+    vec3 dbgDirect = vec3(0.0), dbgAmbient = vec3(0.0);
+    #endif
 
     for (int i = 0; i < PRIMARY_STEPS * 3; i++) {
         if (t >= tEnd || T.g < 0.01) break;
@@ -178,7 +182,7 @@ void main() {
         if (!inCloud) {
             // Same shape as the fine samples minus erosion (which only removes density), so the
             // probe never steps over a cloud the fine march would see.
-            float probe = w.coverage > 0.02 ? cloudDensity(wp, w, 1) : 0.0;
+            float probe = (w.coverage > 0.02 || w.anvil > 0.01) ? cloudDensity(wp, w, 1) : 0.0;
             if (probe > 0.0) {
                 inCloud = true;
                 emptyRun = 0;
@@ -188,21 +192,25 @@ void main() {
             t += coarse;
             continue;
         }
-        float d = cloudDensity(wp, w, PRIMARY_LOD);
+        float d = cloudDensity(wp, w, PRIMARY_LOD, t * pixelSize);
         float dt = fine;
         if (d > 0.0) {
             emptyRun = 0;
-            float sigma = cloudExtinction(d, w.type);
+            float sigma = cloudExtinction(d);
             float h01 = saturate((h - w.base) / (w.top - w.base));
             float odS = sunLit ? lightOpticalDepth(wp, L.sunDir, w) : 0.0;
             vec3 light = sunLit ? eSun * scatterOctaves(odS, cosS, 0.0) : vec3(0.0);
             if (moonLit) light += eMoon * scatterOctaves(lightOpticalDepth(wp, L.moonDir, w), cosM, 0.0);
             // Sky light from above is shaded by the cloud over the sample: with multiple scattering
-            // it diffuses down gently, ~0.6 at the base of a 2 km cumulus (the old fixed 0.55),
-            // ~0.9 under thin stratus, ~0.13 at the base of a 9 km cumulonimbus, which gives storm
-            // towers their dark interiors without greying fair-weather clouds.
-            float skyAo = max(exp(-2.55e-4 * (w.top - h) * sqrt(w.coverage) * CLOUD_DENSITY), 0.1);
-            vec3 amb = mix(ambBottom, ambTop, h01) * INV_4PI * mix(skyAo, 1.0, h01 * h01);
+            // it diffuses down gently, ~0.75 at the base of a 2 km fair-weather cumulus, ~0.9 under
+            // thin stratus, ~0.1 at the base of a 9 km cumulonimbus, which gives storm towers their
+            // dark interiors without greying fair-weather clouds.
+            float skyAo = max(exp(-2.55e-4 * (w.top - h) * sqrt(w.coverage) * w.density * CLOUD_DENSITY), 0.1);
+            // Isotropic in-scatter of the light arriving from each hemisphere is E / (2 pi): sky from
+            // above (shaded by the cloud over the sample), ground and cloud-reflected light from below
+            // (less of it reaches the upper parts). The old E / (4 pi) of a blend of the two halved
+            // the light on every shadowed side, which made fair-weather clouds a muddy grey.
+            vec3 amb = (ambTop * mix(skyAo, 1.0, h01 * h01) + ambBottom * mix(1.0, 0.3, h01)) * (0.5 * INV_PI);
             #ifdef LIGHTNING_FLASH
             // Lightning inside or below the storm: the cloud glows from within, strongest low down.
             amb += vec3(0.7, 0.75, 1.0) * lightningBoltPosition.w * 40.0 * (1.0 - h01) * INV_4PI;
@@ -210,6 +218,10 @@ void main() {
             vec3 S = (light + amb) * sigma;
             float stepT = exp(-sigma * dt);
             scatter += T * (S - S * stepT) / max(sigma, 1e-7);
+            #if DEBUG_VIEW == 26
+            dbgDirect += T * light * (1.0 - stepT);
+            dbgAmbient += T * amb * (1.0 - stepT);
+            #endif
             float absorbed = T.g * (1.0 - stepT);
             distSum += t * absorbed; distW += absorbed;
             T *= stepT;
@@ -227,18 +239,17 @@ void main() {
         vec3 pc = ro + dir * tc;
         vec2 worldXZ = cameraPosition.xz + dir.xz * tc;
         vec2 xz = worldXZ - state.cloudOffset.zw;
-        // Streaks aligned with the mean wind direction (36.9 degrees, a Pythagorean rotation) and
-        // stretched 1.33x along it. Rational cos/sin and tiles of CLOUD_WRAP / (5 m) keep the
-        // pattern periodic over the offset wrap; the old wind-following rotation and 9000 / 6300 m
-        // tiles made the cirrus jump whenever the offset wrapped (and rotated the pattern about
-        // the world origin as the wind turned).
+        // Fibrous strands aligned with the mean wind direction (36.9 degrees, a Pythagorean
+        // rotation) and stretched 3.5x along it. Rational cos/sin and whole tiles per
+        // CLOUD_WRAP / 5 keep the pattern periodic over the offset wrap (any integer tile counts
+        // work: 0.8 * 5 and 0.6 * 5 are integers).
         const mat2 ALIGN = mat2(0.8, -0.6, 0.6, 0.8);
-        vec2 q = (ALIGN * xz) * (vec2(3.0, 4.0) / (CLOUD_WRAP / 5.0));
+        vec2 q = (ALIGN * xz) * (vec2(2.0, 7.0) / (CLOUD_WRAP / 5.0));
         // The noise texture has no mipmaps: octaves finer than the pixel footprint would alias into
         // sparkling streaks near the horizon (seen in game with an earlier pack), so each octave
         // fades to its mean once a texel is smaller than ~2 pixels.
         float footprint = tc * pixelAngularSize() * float(CLOUD_RES) / max(abs(dir.y), 0.03);   // metres
-        float texel = CLOUD_WRAP / 20.0 / 512.0;                                              // metres per texel, octave 1
+        float texel = CLOUD_WRAP / 35.0 / 512.0;                                              // metres per texel across the strands, octave 1
         float f1 = 1.0 - smoothstep(1.0, 3.0, footprint / texel);
         float f2 = 1.0 - smoothstep(1.0, 3.0, footprint * 3.0 / texel);
         float f3 = 1.0 - smoothstep(1.0, 3.0, footprint * 7.0 / texel);
@@ -246,9 +257,10 @@ void main() {
                 + mix(0.5, texture(noise2dTex, q * 3.0 + 0.21).g, f2) * 0.3
                 + mix(0.5, texture(noise2dTex, q * 7.0).a, f3) * 0.1;
         // Cirrus run ahead of weather systems: more of it where the large-scale field is lower
-        // pressure, little under settled high pressure (mean 0.45 as before).
-        float cov = 0.3 + 0.3 * cloudSystems(worldXZ - state.weatherOffset.xy) + 0.25 * rainStrength;
-        float od = saturate((n - (1.0 - cov)) * 2.5) * 0.35 * CIRRUS_AMOUNT;
+        // pressure, little under settled high pressure. Sparse (mean cover ~0.34, so about 15 %
+        // of the sky shows strands) and thin: it should never dominate the sky.
+        float cov = 0.18 + 0.32 * cloudSystems(worldXZ - state.weatherOffset.xy) + 0.2 * rainStrength;
+        float od = saturate((n - (1.0 - cov)) * 2.5) * 0.3 * CIRRUS_AMOUNT;
         float fade = saturate(dir.y * 8.0);
         od *= fade;
         if (od > 0.0) {
@@ -272,6 +284,17 @@ void main() {
     vec3 haze = sampleSkyView(normalize(vec3(dir.x, max(dir.y, 0.03), dir.z)));
     haze = mix(haze, vec3(luminance(haze)) * 0.7, saturate(rainStrength * 0.9));
     scatter = scatter * airT + haze * (1.0 - T) * (1.0 - airT);
+    #if DEBUG_VIEW == 25
+    // Weather map where the ray enters the layer: r coverage (cloud fraction), g type (0.1 stratus,
+    // 0.35 stratocumulus, 0.6 cumulus, 1 cumulonimbus), b size (small .. large cumulus).
+    vec3 wpDbg = cameraPosition + dir * tStart;
+    CloudWeather wDbg = cloudWeatherAt(wpDbg.xz);
+    scatter = vec3(wDbg.coverage, wDbg.type, wDbg.size);
+    #elif DEBUG_VIEW == 26
+    // Lighting: r direct sun and moon scattering, g sky ambient (x4), b optical depth (1 - T).
+    scatter = vec3(luminance(dbgDirect), luminance(dbgAmbient) * 4.0, 0.0) * state.exposure;
+    scatter = vec3(1.0 - exp(-scatter.rg), 1.0 - dot(T, vec3(1.0 / 3.0)));
+    #endif
     imageStore(cloudMarch, px, vec4(scatter, dot(T, vec3(1.0 / 3.0))));
     imageStore(cloudDist, px, vec4(dist));
 }
@@ -285,28 +308,41 @@ uniform sampler2D cloudHistSamplerB;
 layout(rgba16f) uniform writeonly image2D cloudHistA;
 layout(rgba16f) uniform writeonly image2D cloudHistB;
 
+// Temporal super-resolution: the history is full resolution. Each frame the march takes one
+// sample per low-resolution pixel at a sub-pixel position that cycles through an R2 sequence;
+// every full-resolution pixel takes in that sample in proportion to how close it fell, so over a
+// few frames each full-resolution pixel gathers samples from its own area. Before, the history
+// was low resolution and each jittered sample was stored as if taken at the pixel centre: the
+// accumulation box-filtered the detail away and the consumers stretched the result bilinearly,
+// so cloud edges were soft and smeared.
 void main() {
     #ifndef VOLUMETRIC_CLOUDS
     return;
     #endif
     ivec2 px = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 size = textureSize(cloudMarchSampler, 0);
+    ivec2 size = imageSize(cloudHistA);
     if (any(greaterThanEqual(px, size))) return;
+    ivec2 lowSize = textureSize(cloudMarchSampler, 0);
     vec2 uv = (vec2(px) + 0.5) / vec2(size);
-    vec4 cur = texelFetch(cloudMarchSampler, px, 0);
+    ivec2 lp = min(ivec2(uv * vec2(lowSize)), lowSize - 1);
 
-    // 3x3 neighbourhood bounds of the current frame.
-    vec4 mn = cur, mx = cur, m1 = vec4(0.0), m2 = vec4(0.0);
+    // 3x3 low-resolution neighbourhood of the current frame: bounds for the history.
+    vec4 mn = vec4(1e9), mx = vec4(-1e9), m1 = vec4(0.0), m2 = vec4(0.0);
     for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-        vec4 s = texelFetch(cloudMarchSampler, clamp(px + ivec2(i, j), ivec2(0), size - 1), 0);
+        vec4 s = texelFetch(cloudMarchSampler, clamp(lp + ivec2(i, j), ivec2(0), lowSize - 1), 0);
         mn = min(mn, s); mx = max(mx, s);
         m1 += s; m2 += s * s;
     }
     m1 /= 9.0; m2 /= 9.0;
     vec4 sd = sqrt(max(m2 - m1 * m1, 0.0));
+    // This frame's sample of the low-resolution pixel and where it was taken (as in the march).
+    vec4 smp = texelFetch(cloudMarchSampler, lp, 0);
+    vec2 smpUv = (vec2(lp) + r2(float(NOISE_FRAME % 64))) / vec2(lowSize);
+    vec2 dPix = (smpUv - uv) * vec2(size);                       // in full-resolution pixels
+    float near = exp(-dot(dPix, dPix) * 1.4);                     // ~1 inside this pixel, ~0.25 one pixel away
 
     // Reproject through the cloud's distance.
-    float dist = min(texelFetch(cloudDistSampler, px, 0).r, 2e5);
+    float dist = min(texelFetch(cloudDistSampler, lp, 0).r, 2e5);
     vec3 viewPos = screenToView(uv, 1.0, gbufferProjectionInverse);
     vec3 dir = normalize(mat3(gbufferModelViewInverse) * viewPos);
     vec3 worldP = dir * dist + cameraPosition;
@@ -317,16 +353,25 @@ void main() {
     vec3 prevScreen = viewToScreen(prevView, gbufferPreviousProjection);
     bool valid = all(greaterThan(prevScreen.xy, vec2(0.0))) && all(lessThan(prevScreen.xy, vec2(1.0))) && prevView.z < 0.0;
 
-    vec4 hist = cur;
-    if (valid) hist = (frameCounter & 1) == 0 ? texture(cloudHistSamplerB, prevScreen.xy) : texture(cloudHistSamplerA, prevScreen.xy);
-    // Variance clipping keeps history from ghosting when the clouds or the view change.
-    vec4 lo = max(mn, m1 - sd * 1.25), hi = min(mx, m1 + sd * 1.25);
-    hist = clamp(hist, lo, hi);
-    float blend = valid ? 0.12 : 1.0;
-    // Faster response when the camera is moving quickly.
-    blend = max(blend, saturate(length(cameraPosition - previousCameraPosition) * 0.05));
-    vec4 res = mix(hist, cur, blend);
+    vec4 res;
+    if (valid) {
+        vec4 hist = (frameCounter & 1) == 0 ? texture(cloudHistSamplerB, prevScreen.xy) : texture(cloudHistSamplerA, prevScreen.xy);
+        // Variance clipping keeps history from ghosting when the clouds or the view change.
+        hist = clamp(hist, max(mn, m1 - sd * 1.25), min(mx, m1 + sd * 1.25));
+        // A sample that fell in this pixel counts fully; the neighbours' samples (interpolated) a
+        // little, so no pixel goes stale. Faster response when the camera moves quickly.
+        float a = max(0.2 * near, saturate(length(cameraPosition - previousCameraPosition) * 0.05));
+        res = mix(hist, texture(cloudMarchSampler, uv), 0.03);
+        res = mix(res, smp, a);
+    } else {
+        res = texture(cloudMarchSampler, uv);
+    }
     if (any(isnan(res))) res = vec4(0, 0, 0, 1);
+    #if DEBUG_VIEW == 27
+    // Temporal reconstruction: red where the history could not be reprojected (disocclusion, screen
+    // edge), green how strongly this frame's sample was taken in (0.2 = a sample fell in the pixel).
+    res = vec4(valid ? 0.0 : 1.0, valid ? max(0.2 * near, saturate(length(cameraPosition - previousCameraPosition) * 0.05)) * 5.0 : 0.0, 0.0, 1.0);
+    #endif
     if ((frameCounter & 1) == 0) imageStore(cloudHistA, px, res);
     else imageStore(cloudHistB, px, res);
 }

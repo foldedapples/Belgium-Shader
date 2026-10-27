@@ -79,5 +79,17 @@ void main() {
     // Cloud formations (the weather map) drift a little slower than the cloud elements, so
     // clouds form and dissolve across a cluster instead of the pattern sliding rigidly.
     vec2 wo = state.weatherOffset.xy + wind * speed * 0.8 * dt;
-    state.weatherOffset = vec4(mod(wo + 65536.0, 131072.0) - 65536.0, 0.0, 0.0);
+    // Daily regime: each Minecraft day gets its own sky-cover bias (-0.18 .. +0.18), so some days
+    // are mostly clear and others cloudier, on top of the regional weather systems. Eased over
+    // ~90 s so the change at the day boundary is a gradual build-up or clearing, never a jump;
+    // the first frame starts at the target (w = valid).
+    float dayBias = 0.0;
+    #ifdef WEATHER_CLOUDS
+    uint h = uint(worldDay) * 0x9e3779b9u + 0x7f4a7c15u;
+    h ^= h >> 16; h *= 0x7feb352du; h ^= h >> 15; h *= 0x846ca68bu; h ^= h >> 16;
+    float r = float(h & 0xffffu) / 65535.0 * 2.0 - 1.0;
+    dayBias = 0.18 * r * abs(r) * 0.5 + 0.09 * r;     // most days near average, a few clear or cloudy
+    #endif
+    float bias = state.weatherOffset.w != 0.0 ? mix(state.weatherOffset.z, dayBias, 1.0 - exp(-dt / 90.0)) : dayBias;
+    state.weatherOffset = vec4(mod(wo + 65536.0, 131072.0) - 65536.0, bias, 1.0);
 }

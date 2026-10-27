@@ -30,7 +30,16 @@ void main() {
         float dy = (w.top - w.base) / float(N);
         for (int i = 0; i < N; i++) {
             vec3 p = vec3(xz.x, 62.0 + w.base + (float(i) + 0.5) * dy, xz.y);
-            od += cloudExtinction(cloudDensity(p, w, 1), w.type) * dy;
+            od += cloudExtinction(cloudDensity(p, w, 1)) * dy;
+        }
+    }
+    if (w.anvil > 0.01) {
+        // Cumulonimbus anvil spreading above the column.
+        const int NA = 4;
+        float dy = (CLOUD_TOP_STORM - ANVIL_BASE) / float(NA);
+        for (int i = 0; i < NA; i++) {
+            vec3 p = vec3(xz.x, 62.0 + ANVIL_BASE + (float(i) + 0.5) * dy, xz.y);
+            if (p.y - 62.0 >= w.top) od += cloudExtinction(cloudDensity(p, w, 1)) * dy;
         }
     }
     imageStore(cloudShadow, px, vec4(od));

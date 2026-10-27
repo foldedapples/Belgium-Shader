@@ -28,7 +28,7 @@ layout(std430, binding = 0) buffer MeridianState {
     ivec4 simFlags;            // water sim: x field still moving (set by the steps), y dimension the field belongs to,
                                //            z milliseconds the body has been out of the water, w pending splash (x1000)
     ivec4 exposureInfo;        // composite (exposure pass): x frameCounter of the last update, y valid
-    vec4  weatherOffset;       // begin: xy cloud-formation (weather map) wind offset (m), zw unused
+    vec4  weatherOffset;       // begin: xy cloud-formation (weather map) wind offset (m), z daily sky-cover bias, w = z valid
 } state;
 
 #endif

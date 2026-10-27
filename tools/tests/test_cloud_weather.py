@@ -99,7 +99,10 @@ def old_coverage(p, cov):
 
 
 def new_weather(p, cov, weather_systems=True, thunder=0.0):
-    """Mirror of cloudWeatherAt (rain 0) -> coverage, type, base, share of the area in cloud groups."""
+    """Mirror of cloudWeatherAt (rain 0, daily bias 0) -> volume coverage, type, base, sky cover.
+
+    Sky cover is what the weather map asks for (in-group cover x group mask); the 3D density turns
+    the volume coverage into that cover (checked on the real density in test_cloud_density.py)."""
     a, b = wn(p, 1.0), wn(p + 7919.0, 3.0)
     systems = smoothstep(0.1, 0.9, smoothstep(0.236, 0.799, a[..., 0] * 0.8 + b[..., 2] * 0.2)) if weather_systems else 0.5
     warp = (np.stack([a[..., 1], b[..., 1]], -1) - 0.5) * 2600.0
@@ -107,17 +110,24 @@ def new_weather(p, cov, weather_systems=True, thunder=0.0):
     d = wn(p + warp * 0.5 + 3313.0, 5.0)
     cluster = smoothstep(0.328, 0.748, d[..., 1] * 0.55 + c[..., 1] * 0.30 + c[..., 3] * 0.15)
     convective = smoothstep(0.226, 0.854, d[..., 2])
-    swing = min(1.125, 2.25 * min(cov, 1.0 - cov))
+    swing = min(0.9, 2.0 * min(cov, 1.0 - cov))
     target = np.clip(cov + (systems - 0.5) * swing + thunder * 0.2, 0.0, 1.0)
-    share = smoothstep(1.0 - target - 0.18, 1.0 - target + 0.18, cluster)    # inside a cloud group
-    covr = share * (0.4 + 0.45 * target)
     t = 0.34 + (0.62 - 0.34) * (1.0 - smoothstep(0.35, 0.8, systems))
     t = np.clip(t + (convective - 0.5) * 0.35, 0.2, 0.8)
-    t = t + (0.1 - t) * smoothstep(0.85, 1.0, systems) * smoothstep(0.6, 0.9, target) * smoothstep(0.55, 0.8, 1.0 - convective)
+    t = t + (0.1 - t) * smoothstep(0.8, 0.95, target) * smoothstep(0.85, 1.0, systems) * smoothstep(0.55, 0.8, 1.0 - convective)
     t = t + (1.0 - t) * thunder * smoothstep(0.55, 0.8, convective)
     stratus = 1.0 - smoothstep(0.1, 0.3, t)
+    cu = smoothstep(0.35, 0.62, t)
+    size = np.clip(0.65 * convective + 0.35 * smoothstep(0.3, 0.7, c[..., 0]), 0.0, 1.0)
     base = (CLOUD_BASE + (convective - 0.5) * 400.0) * (1 - stratus) + max(CLOUD_BASE * 0.55, 450.0) * stratus
-    return covr, t, base, share
+    thick = 450.0 + 350.0 * smoothstep(0.08, 0.35, t)
+    thick = thick + (350.0 + 2200.0 * size * np.sqrt(size) - thick) * cu
+    in_group = 0.2 + 0.75 * target
+    share = np.minimum(target / in_group, 1.0)
+    group = smoothstep(1.0 - share - 0.12, 1.0 - share + 0.12, cluster)
+    n = 1.3 + (1.0 + 1.25e-3 * thick - 1.3) * cu
+    covr = (1.0 - (1.0 - np.minimum(in_group, 0.995)) ** (1.0 / n)) * group
+    return covr, t, base, in_group * group
 
 
 def grid(extent, step, origin=(0.0, 0.0)):
@@ -138,8 +148,14 @@ def views(cov_map, step, view=15000.0):
 def test_constants_match_shader():
     for s in ("weatherNoise(p + 7919.0, 3.0)", "weatherNoise(p + warp, 11.0)",
               "weatherNoise(p + warp * 0.5 + 3313.0, 5.0)", "smoothstep(0.328, 0.748, d.g * 0.55 + c.g * 0.30 + c.a * 0.15)",
-              "(systems - 0.5) * SWING", "min(1.125, 2.25 * min(CLOUD_COVERAGE, 1.0 - CLOUD_COVERAGE))",
-              "smoothstep(0.1, 0.9, smoothstep(0.236, 0.799, a.r * 0.8 + b.b * 0.2))", "weatherNoise(p, 1.0)", "smoothstep(1.0 - target - 0.18, 1.0 - target + 0.18, cluster)", "mix(0.4, 0.85, target)"):
+              "(systems - 0.5) * SWING", "min(0.9, 2.0 * min(CLOUD_COVERAGE, 1.0 - CLOUD_COVERAGE))",
+              "smoothstep(0.1, 0.9, smoothstep(0.236, 0.799, a.r * 0.8 + b.b * 0.2))", "weatherNoise(p, 1.0)",
+              "float inGroup = 0.2 + 0.75 * target;", "smoothstep(1.0 - share - 0.12, 1.0 - share + 0.12, cluster)",
+              "float n = mix(1.3, 1.0 + 1.25e-3 * (w.top - w.base), cu);",
+              "w.coverage = (1.0 - pow(1.0 - min(inGroup, 0.995), 1.0 / n)) * group;",
+              "w.size = saturate(0.65 * convective + 0.35 * smoothstep(0.3, 0.7, c.r));",
+              "thick = mix(thick, 350.0 + 2200.0 * w.size * sqrt(w.size), cu);",
+              "smoothstep(0.8, 0.95, target) * smoothstep(0.85, 1.0, systems)"):
         assert s in COMMON, s
     print("constants: the model matches lib/clouds/clouds_common.glsl")
 
@@ -160,7 +176,7 @@ def test_coverage_and_variety():
     assert all(abs(m - c) < 0.08 for c, m, _, _ in rows), [(c, m) for c, m, _, _ in rows]
     assert vn.std() > 2.0 * vo.std(), (vn.std(), vo.std())
     assert clear_new > 0.08 and over_new > 0.1, (clear_new, over_new)
-    print("coverage: mean share of sky inside cloud groups for Coverage 0.2 / 0.45 / 0.7: "
+    print("coverage: mean sky cover asked by the weather map for Coverage 0.2 / 0.45 / 0.7: "
           + " / ".join(f"{m:.2f}" for _, m, _, _ in rows))
     print(f"variety (Coverage 0.45, 15 km views): spread {vn.std():.2f} (old {vo.std():.2f}); "
           f"almost clear {100 * clear_new:.0f} % (old {100 * clear_old:.0f} %), "
@@ -202,8 +218,8 @@ def test_seamless_at_wrap():
 
 
 def test_types_and_heights():
-    covr, t, base, _ = new_weather(P, 0.45)
-    cloudy = covr > 0.2
+    covr, t, base, sky = new_weather(P, 0.45)
+    cloudy = sky > 0.3
     tc, bc = t[cloudy], base[cloudy]
     stratus, sc, cu = (tc < 0.2).mean(), ((tc >= 0.2) & (tc < 0.48)).mean(), (tc >= 0.48).mean()
     assert 0.03 < stratus < 0.3 and sc > 0.3 and cu > 0.2, (stratus, sc, cu)
