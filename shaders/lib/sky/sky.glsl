@@ -56,6 +56,61 @@ vec3 nightSkyRadiance(vec3 dir, float pixelAngle, float gain) {
     return c;
 }
 
+// ---- rainbow
+// A rainbow is sunlight refracted and reflected inside raindrops, concentrated at the angle of
+// minimum deviation, which depends on the refractive index n(lambda) of water. Measured from the
+// antisolar point: primary bow (one internal reflection) at 4r - 2i with cos^2 i = (n^2 - 1) / 3;
+// secondary (two reflections) at pi - (6r - 2i) with cos^2 i = (n^2 - 1) / 8, colours reversed and
+// fainter. Between them lies Alexander's dark band, where no once- or twice-reflected light
+// arrives; inside the primary the sky is slightly brighter. n(lambda): Cauchy fit through measured
+// values for water (tools/tests/test_rainbow.py).
+float rainbowAngle(float lambdaNm, bool secondary) {
+    float n = 1.3242 + 3080.0 / (lambdaNm * lambdaNm);    // n(400 nm) = 1.3435, n(700 nm) = 1.3305
+    float cosI = sqrt((n * n - 1.0) / (secondary ? 8.0 : 3.0));
+    float i = acos(cosI);
+    float r = asin(sin(i) / n);
+    return secondary ? PI - (6.0 * r - 2.0 * i) : 4.0 * r - 2.0 * i;
+}
+
+// Approximate linear-RGB response to a spectral line (sums to white over the samples below).
+vec3 spectralRgb(float lambdaNm) {
+    vec3 c = vec3(exp(-sq((lambdaNm - 605.0) / 42.0)) + 0.3 * exp(-sq((lambdaNm - 445.0) / 22.0)),
+                  exp(-sq((lambdaNm - 545.0) / 44.0)),
+                  exp(-sq((lambdaNm - 455.0) / 32.0)));
+    return c;
+}
+
+// Multiplier and additive light for a sky direction: (scale, added colour relative to the sky).
+vec3 rainbowLight(vec3 dir, vec3 sunDir, out float skyScale) {
+    skyScale = 1.0;
+    #ifdef RAINBOWS
+    // After rain with the air still wet; the sun out (not in a storm) and below 42 degrees.
+    float vis = smoothstep(0.08, 0.35, wetness) * (1.0 - smoothstep(0.2, 0.6, rainStrength))
+              * (1.0 - thunderStrength) * biomeWet
+              * smoothstep(-0.02, 0.05, sunDir.y) * (1.0 - smoothstep(0.62, 0.68, sunDir.y));
+    if (vis <= 0.001 || dir.y <= 0.0) return vec3(0.0);
+    float ang = acos(clamp(dot(dir, -sunDir), -1.0, 1.0));
+    const float WIDTH = 0.0105;              // ~0.6 deg: sun disk plus drop-size spread
+    vec3 bow = vec3(0.0), norm = vec3(0.0);
+    for (int k = 0; k < 7; k++) {
+        float lam = 410.0 + float(k) * 48.0;
+        vec3 rgb = spectralRgb(lam);
+        norm += rgb;
+        bow += rgb * exp(-sq((ang - rainbowAngle(lam, false)) / WIDTH));
+        bow += rgb * 0.42 * exp(-sq((ang - rainbowAngle(lam, true)) / (WIDTH * 1.4)));
+    }
+    bow /= norm;
+    float p = rainbowAngle(560.0, false), s = rainbowAngle(560.0, true);
+    // Alexander's dark band and the brighter sky inside the primary.
+    skyScale = 1.0 - vis * 0.18 * smoothstep(p + 0.01, p + 0.03, ang) * (1.0 - smoothstep(s - 0.03, s - 0.01, ang))
+             + vis * 0.08 * (1.0 - smoothstep(p - 0.15, p - 0.01, ang));
+    // Fade towards the ground, where the rain curtain thins out.
+    return bow * vis * RAINBOW_STRENGTH * 0.55 * smoothstep(0.0, 0.08, dir.y);
+    #else
+    return vec3(0.0);
+    #endif
+}
+
 // `withSun` / `withMoon` add the disks. Reflections leave out whichever body is the shadow-casting
 // light: the BRDF already adds that one as an analytic, area-correct glint, and adding the disk
 // too counted it twice (and as an aliased sub-pixel spot).
@@ -69,6 +124,10 @@ vec3 skyRadianceDisks(vec3 dir, SkyLights L, float pixelAngle, bool withSun, boo
     // A lightning flash lights the whole storm sky for a moment.
     scatter += vec3(0.65, 0.7, 0.95) * lightningBoltPosition.w * (0.6 + 0.4 * thunderStrength);
     #endif
+    // Rainbow: relative to the sky light behind it, so it can never outshine the sky.
+    float bowScale;
+    vec3 bow = rainbowLight(dir, L.sunDir, bowScale);
+    scatter = scatter * bowScale + bow * luminance(scatter);
     vec3 trans = transmittanceToTop(r, dir.y);
     vec3 space = nightSkyRadiance(dir, pixelAngle, L.skyGain);
     if (withSun || withMoon) {
