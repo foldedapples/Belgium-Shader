@@ -7,6 +7,10 @@
 #include "/lib/material/ids.glsl"
 #include "/lib/material/labpbr.glsl"
 #include "/lib/material/fallback.glsl"
+#ifdef GBUF_BLOCK
+#include "/lib/common/noise.glsl"
+#include "/lib/material/end_portal.glsl"
+#endif
 
 uniform sampler2D gtexture;
 uniform sampler2D normals;
@@ -87,6 +91,16 @@ void main() {
     vec2 dx = dFdx(vUv), dy = dFdy(vUv);
     vec3 n = normalize(vNormal);
     if (!gl_FrontFacing) n = -n;
+
+    #ifdef GBUF_BLOCK
+    if (vId == MAT_END_PORTAL || vId == MAT_END_GATEWAY) {
+        // Self-lit starfield (lib/material/end_portal.glsl), unaffected by light and shadow.
+        outAlbedo = encodeGB1(endPortalColor(vPlayerPos, n), 1.0);
+        outNormal = encodeGB2(n, n, normalizeLightmap(vLightmap));
+        outMaterial = encodeGB3(vec4(0.0, 10.0 / 255.0, 0.0, 1.0), MAT_EMISSIVE_FLAT, FLAG_ENTITY | FLAG_NO_PUDDLE, 1.0);
+        return;
+    }
+    #endif
     mat3 tbn = textureTangentFrame(n, vPlayerPos, vUv, vTangent);
 
     float pomShadow = 1.0;

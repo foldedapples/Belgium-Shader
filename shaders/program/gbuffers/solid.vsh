@@ -54,6 +54,11 @@ void main() {
     #elif defined GBUF_EMISSIVE
     vId = MAT_EMISSIVE_FLAT;
     vLightLevel = 15.0;
+    #elif defined GBUF_BLOCK
+    // Block entities: Iris applies block.properties to them through blockEntityId (the End portal
+    // and gateway need it; everything else is a plain surface).
+    vId = (blockEntityId == MAT_END_PORTAL || blockEntityId == MAT_END_GATEWAY) ? blockEntityId : MAT_DEFAULT;
+    vLightLevel = 0.0;
     #else
     vId = MAT_DEFAULT;
     vLightLevel = 0.0;
