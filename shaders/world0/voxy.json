@@ -1,17 +1,9 @@
 {
-  "version": 1,
-  "opaqueDrawBuffers": [1, 2, 3, 4],
-  "translucentDrawBuffers": [5, 6],
-  "blending": {
-    "0": "SRC_ALPHA ONE_MINUS_SRC_ALPHA ONE ONE_MINUS_SRC_ALPHA",
-    "1": "SRC_ALPHA ONE_MINUS_SRC_ALPHA ONE ONE_MINUS_SRC_ALPHA"
-  },
-  "uniforms": [
-    "viewWidth",
-    "viewHeight"
-  ],
-  "samplers": {
-    "depthtex0": "sampler2D"
-  },
-  "excludeLodsFromVanillaDepth": true
+    "version": 1,
+    "opaqueDrawBuffers": [1, 2, 3],
+    "translucentDrawBuffers": [4, 5],
+    "uniforms": [],
+    "samplers": [],
+    "excludeLodsFromVanillaDepth": true,
+    "blending": "off"
 }

@@ -1,210 +1,169 @@
-#ifndef SKY_CELESTIAL_GLSL
-#define SKY_CELESTIAL_GLSL
-#include "/lib/core/common.glsl"
+#ifndef MERIDIAN_CELESTIAL
+#define MERIDIAN_CELESTIAL
 
-// Deterministic celestial model (ORIGINAL_ARCHITECTURE.md sec. 4).
+// Celestial geometry and light levels (player space, y up).
 //
-// Sun: vanilla direction (authoritative for gameplay time).
-// Moon: its hour angle trails the sun's by the elongation E. E advances 2*pi per synodic
-// period of 8 Minecraft days and is phase-locked so moonPhase 0 (vanilla "full moon") is
-// E = pi at midnight. The moon is lifted out of the sun's path by an ecliptic latitude
-// beta = i * sin(u); the argument of latitude u is built so that syzygies drift through the
-// orbital nodes with period ECLIPSE_CYCLE_DAYS - eclipses happen when a new/full moon falls
-// near a node, exactly as in reality, just on a compressed calendar.
+// The sun follows Minecraft's path (from sunPosition). The Moon is placed by an orbital model:
+// its elongation from the sun follows the phase cycle (new moon beside the sun, full moon
+// opposite), continuously through the day, and its orbit is inclined 5.1 degrees to the sun's
+// path with nodes that regress over 18 lunar cycles. The Moon is lit by the actual sun direction,
+// so phases, the terminator and the crescent's orientation come from geometry; eclipses happen
+// when the bodies line up near a node.
+//
+// Brightness scale: TOA solar illuminance is SUN_ILLUMINANCE (arbitrary units; exposure adapts).
+// Physical full-moon / sun illuminance is ~2.5e-6; nights are lifted by nightGain() so moonlit
+// scenes stay playable (documented in docs/ARCHITECTURE.md, "Light levels").
 
-const float SYNODIC_DAYS = 8.0;
+const float sunPathRotation = -25.0;
+const float SUN_ILLUMINANCE = 10.0 * SUN_BRIGHTNESS;
+const float SUN_ANGULAR_RADIUS = 0.004654 * SUN_SIZE;      // 0.2666 deg
+const float MOON_ANGULAR_RADIUS = 0.004521 * MOON_SIZE;    // 0.2590 deg
+const float MOON_PHYSICAL_RATIO = 2.5e-6;                  // full moon / sun illuminance at Earth
+const float NIGHT_GAIN_MAX = 450.0 * NIGHT_BRIGHTNESS;
 
-float deg2rad(float d) { return d * (PI / 180.0); }
+// Night lift: 1 by day (the Moon and stars keep their physical radiance against the day sky),
+// rising to NIGHT_GAIN_MAX once the sun is well below the horizon (a stand-in for the eye's
+// dark adaptation, which spans far more than a display can show).
+float nightGain(vec3 sunDir) { return mix(1.0, NIGHT_GAIN_MAX, smoothstep(0.04, -0.16, sunDir.y)); }
+const float MOON_INCLINATION = 0.0890;                     // 5.1 deg
+const float EARTH_UMBRA_RADIUS = 0.0120;                   // ~0.69 deg at the Moon's distance
+const float EARTH_PENUMBRA_RADIUS = 0.0218;
 
-// Diurnal rotation axis of the sun's path. Minecraft's path always passes through the east and
-// west horizon points and is tilted by sunPathRotation; the sign convention is resolved
-// against the live sun direction so we never depend on an assumed handedness.
-vec3 celestialAxis(vec3 sunDir) {
-    float r = deg2rad(sunPathRotation);
-    vec3 a0 = vec3(0.0, sin(r), cos(r));
-    vec3 a1 = vec3(0.0, -sin(r), cos(r));
-    vec3 a2 = -a0;
-    vec3 a3 = -a1;
-    // The sun rises at +X and moves by +2*pi*sunAngle about the axis.
-    float ang = TAU * sunAngle;
-    vec3 east = vec3(1.0, 0.0, 0.0);
-    float s0 = dot(rotateAxis(east, a0, ang), sunDir);
-    float s1 = dot(rotateAxis(east, a1, ang), sunDir);
-    float s2 = dot(rotateAxis(east, a2, ang), sunDir);
-    float s3 = dot(rotateAxis(east, a3, ang), sunDir);
-    vec3 best = a0; float bs = s0;
-    if (s1 > bs) { best = a1; bs = s1; }
-    if (s2 > bs) { best = a2; bs = s2; }
-    if (s3 > bs) { best = a3; bs = s3; }
-    return best;
+vec3 sunDirection() { return celestialDirection(sunPosition); }
+
+// Axis of the daily rotation of the sky in player space. With Iris's celestial matrix
+// (rotate Y -90, rotate Z sunPathRotation, rotate X skyAngle) the sun moves on a great circle about
+// (0, +-sin r, cos r). The sign convention of r is not documented, so begin.csh measures it from
+// the observed sun direction while the sun is well away from the horizon (where the two
+// candidates are clearly distinguishable) and stores it in state.lightBasis[0].w.
+float celestialAxisSignFromSun(vec3 sunDir) {
+    float r = radians(sunPathRotation);
+    float d1 = abs(dot(vec3(0.0, sin(r), cos(r)), sunDir));
+    float d2 = abs(dot(vec3(0.0, -sin(r), cos(r)), sunDir));
+    return abs(d1 - d2) > 0.05 ? (d1 < d2 ? 1.0 : -1.0) : 0.0;   // 0: undecidable now
 }
 
-// Continuous time in days, split to keep precision for large worldDay values.
-float dayFraction() { return float(worldTime % 24000) / 24000.0; }
-
-// Monotonic time warp that slows the moon only near new and full moon, so eclipses last
-// minutes of real time instead of seconds while the rest of the month advances normally.
-// Phase speed = 1 - k*(cos^8(2*pi*phi) - 35/128): narrow dip of depth `strength` at syzygy.
-// Its antiderivative has a finite Fourier series (cos^8 expansion), giving this closed form.
-float warpSynodicPhase(float phi, float strength) {
-    float s = clamp(strength, 0.0, 0.92);
-    float k = s * 128.0 / 93.0;
-    float x = TAU * phi;
-    float series = 28.0 * sin(2.0 * x) + 7.0 * sin(4.0 * x) + (4.0 / 3.0) * sin(6.0 * x) + 0.125 * sin(8.0 * x);
-    return phi - k / (TAU * 128.0) * series;
+vec3 celestialAxis() {
+    float r = radians(sunPathRotation);
+    float sgn = 1.0;
+    #ifdef MERIDIAN_STATE
+    if (state.lightBasis[0].w != 0.0) sgn = sign(state.lightBasis[0].w);
+    #endif
+    return vec3(0.0, sgn * sin(r), cos(r));
 }
 
-struct CelestialState {
-    vec3  sunDir;
-    vec3  moonDir;
-    vec3  axis;
-    float elongation;   // radians, 0 new .. pi full
-    float phaseAngle;   // sun-moon-observer angle
-    float sunRadius;    // angular radius (rad)
-    float moonRadius;
-    float solarCoverage; // 0..1 fraction of the (limb-darkened) sun hidden
-    float lunarUmbra;    // 0..1 disk-averaged depth in umbra
-    float lunarPenumbra; // 0..1 disk-averaged penumbral dimming
-    bool  preview;
+// Continuous position in the 8-day phase cycle: 0 full, 4 new.
+float lunarCycle() {
+    return mod(float(worldDay) + float(worldTime) / 24000.0, 8.0);
+}
+
+vec3 moonDirection() {
+    vec3 s = sunDirection();
+    vec3 a = celestialAxis();
+    float cyc = lunarCycle();
+    // Elongation east of the sun: 180 deg at full, 0 at new. Waxing moon trails the sun.
+    float elong = PI * abs(4.0 - cyc) / 4.0;
+    float side = cyc < 4.0 ? 1.0 : -1.0;      // waning (0..4) leads the sun, waxing (4..8) trails
+    vec3 m = rotateAxis(s, a, side * elong);
+    // Ecliptic latitude from the inclined orbit; the node regresses once every 144 days.
+    #ifdef ECLIPSES
+    float node = TAU * (float(worldDay) + float(worldTime) / 24000.0) / 144.0;
+    float lat = MOON_INCLINATION * sin(cyc / 8.0 * TAU + node);
+    #else
+    float lat = MOON_INCLINATION * 1.2;
+    #endif
+    vec3 b = normalize(cross(a, m));
+    return normalize(rotateAxis(m, b, lat));
+}
+
+// Lunar phase angle (sun-moon-observer) and the brightness law of the Moon (Allen 1973:
+// magnitude rises by 0.026 |a| + 4e-9 a^4 with a in degrees).
+float moonPhaseAngle(vec3 sunDir, vec3 moonDir) { return acos(clamp(-dot(sunDir, moonDir), -1.0, 1.0)); }
+
+float moonPhaseBrightness(float phaseAngle) {
+    float a = degrees(phaseAngle);
+    return pow(10.0, -0.4 * (0.026 * a + 4.0e-9 * a * a * a * a));
+}
+
+// Area fraction of disk 1 (radius r1) covered by disk 2 (radius r2) at centre distance d.
+float diskOverlap(float r1, float r2, float d) {
+    if (d >= r1 + r2) return 0.0;
+    if (d <= abs(r2 - r1)) return r2 >= r1 ? 1.0 : (r2 * r2) / (r1 * r1);
+    float a1 = r1 * r1 * acos(clamp((d * d + r1 * r1 - r2 * r2) / (2.0 * d * r1), -1.0, 1.0));
+    float a2 = r2 * r2 * acos(clamp((d * d + r2 * r2 - r1 * r1) / (2.0 * d * r2), -1.0, 1.0));
+    float a3 = 0.5 * sqrt(max((-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2), 0.0));
+    return (a1 + a2 - a3) / (PI * r1 * r1);
+}
+
+// Fraction of the solar disk still visible (solar eclipse).
+float solarVisibility(vec3 sunDir, vec3 moonDir) {
+    #ifdef ECLIPSES
+    float d = acos(clamp(dot(sunDir, moonDir), -1.0, 1.0));
+    return 1.0 - diskOverlap(SUN_ANGULAR_RADIUS, MOON_ANGULAR_RADIUS, d);
+    #else
+    return 1.0;
+    #endif
+}
+
+// Light reaching the Moon through Earth's shadow (lunar eclipse): 1 outside, deep red inside.
+vec3 lunarEclipseFactor(vec3 sunDir, vec3 moonDir) {
+    #ifdef ECLIPSES
+    float d = acos(clamp(-dot(sunDir, moonDir), -1.0, 1.0));
+    float pen = smoothstep(EARTH_UMBRA_RADIUS, EARTH_PENUMBRA_RADIUS, d);
+    float umbra = smoothstep(EARTH_UMBRA_RADIUS - MOON_ANGULAR_RADIUS, EARTH_UMBRA_RADIUS + MOON_ANGULAR_RADIUS, d);
+    // Inside the umbra only light refracted through Earth's atmosphere arrives: reddened, ~1e-3.
+    vec3 refracted = vec3(0.012, 0.0035, 0.0012);
+    return mix(refracted, vec3(1.0), umbra) * mix(0.55, 1.0, pen);
+    #else
+    return vec3(1.0);
+    #endif
+}
+
+struct SkyLights {
+    vec3 sunDir;
+    vec3 moonDir;
+    vec3 lightDir;      // shadow-casting light (sun by day, moon by night)
+    float sunIllum;     // TOA solar illuminance after eclipse
+    vec3 moonIllum;     // illuminance from the Moon at the top of the atmosphere (night-gained)
+    vec3 moonFullIllum; // the same without the phase law (for shading the disk itself)
+    float moonPhase;    // phase angle, radians
+    bool sunIsLight;
+    float skyGain;      // night lift for sky light (stars, airglow): stronger without the Moon
 };
 
-// Synodic phase phi in [0,1): 0 full moon, 0.5 new moon. Full moon is at midnight of
-// day 0 (vanilla moonPhase 0); new moon is placed at noon of day 4 so conjunctions - and
-// therefore solar eclipses - happen with the sun up. The waning half lasts 3.5 days and the
-// waxing half 4.5; the syzygy slowdown hides the change of rate.
-float synodicPhase() {
-    float t = mod(float(worldDay % 8) + dayFraction() - 0.75, 8.0);
-    return t < 3.5 ? t / 7.0 : 0.5 + (t - 3.5) / 9.0;
+SkyLights skyLights() {
+    SkyLights s;
+    s.sunDir = sunDirection();
+    s.moonDir = moonDirection();
+    s.moonPhase = moonPhaseAngle(s.sunDir, s.moonDir);
+    s.sunIllum = SUN_ILLUMINANCE * solarVisibility(s.sunDir, s.moonDir);
+    // The Moon reflects sunlight; its own albedo is slightly red (LRO WAC mean colour).
+    vec3 lunarTint = vec3(1.0, 0.93, 0.84);
+    s.moonFullIllum = SUN_ILLUMINANCE * MOON_PHYSICAL_RATIO * nightGain(s.sunDir) * MOON_BRIGHTNESS *
+                      lunarTint * lunarEclipseFactor(s.sunDir, s.moonDir);
+    s.moonIllum = s.moonFullIllum * moonPhaseBrightness(s.moonPhase);
+    // Dark adaptation goes further on moonless nights; the faint sky light (airglow, stars) is
+    // lifted up to 8x more when the Moon is new or below the horizon. Moonlight itself is not.
+    float moonPresence = moonPhaseBrightness(s.moonPhase) * smoothstep(-0.05, 0.10, s.moonDir.y);
+    s.skyGain = nightGain(s.sunDir) * mix(1.0, 8.0, (1.0 - moonPresence) * smoothstep(0.0, -0.2, s.sunDir.y));
+    s.sunIsLight = s.sunDir.y > -0.03 || s.moonDir.y < 0.0;
+    s.lightDir = s.sunIsLight ? s.sunDir : s.moonDir;
+    // Moonlight fades in after the switch so moon shadows never pop at dusk.
+    s.moonIllum *= smoothstep(-0.03, -0.12, s.sunDir.y) * smoothstep(-0.02, 0.06, s.moonDir.y);
+    return s;
 }
 
-// Phase of the nodal cycle. The effective period is ECLIPSE_CYCLE_DAYS + 2.5 days: node
-// passages then drift 1.25 days per eclipse season against the 8-day month, so seasons
-// alternate between catching new moons (solar) and full moons (lunar). An integer multiple
-// of 8 would lock every season to the same phase. 2*(C + 2.5) is an integer, so wrapping
-// worldDay by it keeps the cycle exact for any world age.
-float nodalPhase() {
-    int c = max(int(ECLIPSE_CYCLE_DAYS), 1);
-    int wrap = 2 * c + 5;
-    float period = float(c) + 2.5;
-    float t = float(worldDay % wrap) + dayFraction();
-    return fract(t / period);
-}
-
-// Limb darkening of the solar photosphere (quadratic law with typical visible coefficients).
-float solarLimbDarkening(float mu) {
-    return 1.0 - 0.56 * (1.0 - mu) - 0.24 * sq(1.0 - mu);
-}
-
-// Fraction of the sun's limb-darkened flux hidden by a disk of radius rm at angular separation
-// sep. Integrated numerically on a polar grid (begin.csh runs this once per frame).
-float solarOcclusion(float rs, float rm, float sep) {
-    if (sep >= rs + rm) return 0.0;
-    float hidden = 0.0, total = 0.0;
-    const int NR = 12, NA = 24;
-    for (int i = 0; i < NR; i++) {
-        float rr = (float(i) + 0.5) / float(NR);
-        float mu = sqrt(max(1.0 - rr * rr, 0.0));
-        float w = solarLimbDarkening(mu) * rr;
-        for (int j = 0; j < NA; j++) {
-            float a = TAU * (float(j) + 0.5) / float(NA);
-            vec2 p = rr * rs * vec2(cos(a), sin(a));
-            float d = length(p - vec2(sep, 0.0));
-            hidden += w * step(d, rm);
-            total += w;
-        }
-    }
-    return hidden / max(total, EPSILON);
-}
-
-// Earth's shadow at the moon's distance, in units of the moon's angular radius (real-world
-// ratios: umbra ~2.7, penumbra ~4.9 lunar radii).
-const float UMBRA_RATIO = 2.7;
-const float PENUMBRA_RATIO = 4.9;
-
-// Direct-sunlight fraction reaching a point on the moon at angular distance d from the
-// anti-sun point: 0 inside the umbra, linear across the penumbra (the penumbral profile is the
-// sun's disk progressively uncovered by Earth).
-float lunarSunlitFraction(float d, float rm) {
-    float ru = UMBRA_RATIO * rm, rp = PENUMBRA_RATIO * rm;
-    return smoothstep(ru, rp, d);
-}
-
-void lunarShadowAverages(vec3 moonDir, vec3 antiSun, float rm, out float umbra, out float penumbra) {
-    float sep = acos(clamp(dot(moonDir, antiSun), -1.0, 1.0));
-    umbra = 0.0; penumbra = 0.0;
-    if (sep > (PENUMBRA_RATIO + 1.0) * rm) return;
-    float sumLit = 0.0, sumUmbra = 0.0, n = 0.0;
-    const int NG = 9;
-    for (int i = 0; i < NG; i++) for (int j = 0; j < NG; j++) {
-        vec2 q = (vec2(i, j) + 0.5) / float(NG) * 2.0 - 1.0;
-        if (dot(q, q) > 1.0) continue;
-        // Offset along the separation axis only matters radially; use planar approximation.
-        float d = length(vec2(sep, 0.0) + q * rm);
-        float lit = lunarSunlitFraction(d, rm);
-        sumLit += lit;
-        sumUmbra += step(d, UMBRA_RATIO * rm);
-        n += 1.0;
-    }
-    penumbra = 1.0 - sumLit / max(n, 1.0);
-    umbra = sumUmbra / max(n, 1.0);
-}
-
-CelestialState computeCelestial(vec3 sunDir) {
-    CelestialState c;
-    c.sunDir = sunDir;
-    c.axis = celestialAxis(sunDir);
-    c.sunRadius = deg2rad(BE_SUN_SIZE) * 0.5;
-    c.moonRadius = deg2rad(BE_MOON_SIZE) * 0.5;
-    c.preview = false;
-
-    float phi = synodicPhase();
-    float phiWarped = warpSynodicPhase(phi, ECLIPSE_SLOWDOWN);
-    float E = PI + TAU * phiWarped;               // elongation east of the sun
-    // Argument of latitude: at syzygy (phi = 0 or 0.5) beta = +/-i*sin(2*pi*nodalPhase), so
-    // eclipse seasons recur twice per ECLIPSE_CYCLE_DAYS.
-    float beta = deg2rad(MOON_INCLINATION) * sin(TAU * (phiWarped + nodalPhase()));
-
-    #if BE_ECLIPSE_PREVIEW != 0
-    {
-        // Preview: hold the moon at the relevant syzygy and sweep it across the sun/umbra over
-        // a 60-second loop of real time, independent of world time.
-        c.preview = true;
-        float sweep = cos(TAU * fract(frameTimeCounter / 60.0));
-        float sumR = c.sunRadius + c.moonRadius;
-        #if BE_ECLIPSE_PREVIEW == 1 || BE_ECLIPSE_PREVIEW == 3
-            float minSep = 0.55;   // partial
-        #else
-            float minSep = 0.0;    // total
-        #endif
-        float reach = (BE_ECLIPSE_PREVIEW <= 2) ? sumR : (PENUMBRA_RATIO + 1.0) * c.moonRadius;
-        beta = mix(minSep * reach, 1.6 * reach, 0.5 + 0.5 * sweep);
-        E = (BE_ECLIPSE_PREVIEW <= 2) ? 0.0 : PI;
-        phi = (BE_ECLIPSE_PREVIEW <= 2) ? 0.5 : 0.0;
-    }
-    #endif
-
-    vec3 inPlane = rotateAxis(sunDir, c.axis, -E);
-    c.moonDir = safeNormalize(inPlane * cos(beta) + c.axis * sin(beta));
-    c.elongation = acos(clamp(dot(c.moonDir, sunDir), -1.0, 1.0));
-    c.phaseAngle = PI - c.elongation;
-
-    float sepSun = c.elongation;
-    c.solarCoverage = solarOcclusion(c.sunRadius, c.moonRadius, sepSun);
-    lunarShadowAverages(c.moonDir, -sunDir, c.moonRadius, c.lunarUmbra, c.lunarPenumbra);
-    return c;
-}
-
-// Disk-integrated reflectance law of the moon as a function of phase angle: a Lambert sphere
-// blended with a Lommel-Seeliger sphere (which matches the flat-looking full moon), plus a
-// small opposition surge near full moon. Normalised to 1 at full.
-float lunarPhaseLaw(float alpha) {
-    // tan(alpha/2) diverges at alpha = pi (new moon) where the integral itself goes to 0.
-    alpha = clamp(alpha, 1e-3, PI - 2e-2);
-    float lambert = (sin(alpha) + (PI - alpha) * cos(alpha)) / PI;
-    float ls = 1.0 - sin(alpha * 0.5) * tan(alpha * 0.5) * log(1.0 / tan(alpha * 0.25));
-    ls = max(ls, 0.0);
-    float opposition = 1.0 + 0.35 * exp(-alpha * 12.0);
-    return clamp(mix(lambert, ls, 0.6) * opposition / 1.35, 0.0, 1.0);
+// Sidereal rotation of the star sphere: the sky turns once per day around the celestial axis,
+// plus the yearly drift (stars rise ~4 minutes earlier each day). Returns a matrix taking
+// player-space directions to equatorial coordinates (x towards RA 0h, z north pole).
+mat3 equatorialFromPlayer() {
+    vec3 pole = celestialAxis();
+    float daysF = float(worldDay) + float(worldTime) / 24000.0;
+    float angle = sunAngle * TAU + daysF * TAU / 365.25;
+    vec3 ref = normalize(cross(pole, vec3(1.0, 0.0, 0.0)));
+    ref = rotateAxis(ref, pole, -angle);
+    vec3 third = cross(pole, ref);
+    return transpose(mat3(ref, third, pole));
 }
 
 #endif

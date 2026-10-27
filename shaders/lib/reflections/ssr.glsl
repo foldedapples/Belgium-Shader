@@ -1,73 +1,73 @@
-#ifndef REFLECTIONS_SSR_GLSL
-#define REFLECTIONS_SSR_GLSL
-#include "/lib/core/common.glsl"
+#ifndef MERIDIAN_SSR
+#define MERIDIAN_SSR
 
-// Screen-space reflection trace (ORIGINAL_ARCHITECTURE.md sec. 8.3 / 18).
-// The ray is marched in screen space, where NDC depth varies linearly along a projected line,
-// so interpolating (uv, ndc depth) is perspective-correct. Hits require the ray to be behind
-// the depth buffer by less than a thickness that grows with the step length, then a binary
-// search refines the hit. Rays leaving the screen or facing the camera fade out so the
-// caller can blend toward its environment fallback.
+// Screen-space reflections: march the reflected ray in screen space (perspective-correct depth),
+// accept a hit when the ray passes behind the depth buffer by less than a thickness that grows
+// with distance, refine with a binary search, and fade near screen edges and for rays towards the
+// camera. Only what is on screen can be reflected; misses fall back to the sky (with sky-light
+// occlusion), never to black. Requires transform.glsl.
 
-struct SsrResult {
-    bool  hit;
-    vec2  uv;
-    float confidence;   // 0..1: edge fade x facing fade
+struct SSRHit {
+    vec2 uv;
+    float confidence;   // 0 = no hit (use fallback)
+    float dist;         // view-space length to the hit
 };
 
-float ssrLinearDepth(float ndcDepth01) { return linearizeDepth(ndcDepth01, near, far); }
+SSRHit traceSSR(vec3 viewPos, vec3 viewDir, sampler2D depthTex, float noise, int steps) {
+    SSRHit h;
+    h.uv = vec2(0.0);
+    h.confidence = 0.0;
+    h.dist = 0.0;
+    // Rays pointing at the camera cannot hit anything visible.
+    if (viewDir.z > 0.0 && viewPos.z + viewDir.z * 2.0 > -near) return h;
 
-SsrResult traceScreenSpace(vec3 viewPos, vec3 viewDir, sampler2D depthTex, int steps, float jitter) {
-    SsrResult r;
-    r.hit = false; r.uv = vec2(0.0); r.confidence = 0.0;
-
-    // Clip the ray before it passes the near plane.
-    float rayLength = far * 1.2;
-    if (viewDir.z > 0.0) rayLength = min(rayLength, (-near * 1.5 - viewPos.z) / viewDir.z);
-    if (rayLength <= 0.0) return r;
-    vec3 endPos = viewPos + viewDir * rayLength;
-
-    vec3 s0 = viewToScreen(viewPos);
-    vec3 s1 = viewToScreen(endPos);
+    // Clip the ray to the near plane and a maximum length.
+    float maxLen = 384.0;
+    if (viewDir.z > 0.0) maxLen = min(maxLen, (-near * 1.5 - viewPos.z) / viewDir.z);
+    vec3 endView = viewPos + viewDir * maxLen;
+    vec3 s0 = viewToScreen(viewPos, gbufferProjection);
+    vec3 s1 = viewToScreen(endView, gbufferProjection);
     // Clip the screen-space segment to the viewport.
     vec2 d = s1.xy - s0.xy;
     float tMax = 1.0;
     if (d.x > 0.0) tMax = min(tMax, (1.0 - s0.x) / d.x); else if (d.x < 0.0) tMax = min(tMax, -s0.x / d.x);
     if (d.y > 0.0) tMax = min(tMax, (1.0 - s0.y) / d.y); else if (d.y < 0.0) tMax = min(tMax, -s0.y / d.y);
-    s1 = mix(s0, s1, max(tMax, 0.0));
+    tMax = max(tMax, 0.0);
 
-    vec3 delta = (s1 - s0) / float(steps);
-    // Too-short rays (reflection pointing almost straight at the camera) are unreliable.
-    float pixels = length((s1.xy - s0.xy) * vec2(viewWidth, viewHeight));
-    if (pixels < 2.0) return r;
-
-    vec3 p = s0 + delta * jitter;
-    vec3 prev = s0;
-    for (int i = 0; i < steps; i++) {
-        p += delta;
-        float sceneDepth = texture(depthTex, p.xy).r;
-        if (p.z > sceneDepth && sceneDepth < 1.0) {
-            float rayLin = ssrLinearDepth(p.z);
-            float sceneLin = ssrLinearDepth(sceneDepth);
-            float stepLin = abs(rayLin - ssrLinearDepth(prev.z)) + 0.05 * rayLin;
-            if (rayLin - sceneLin < max(stepLin * 1.5, 0.25)) {
-                // Binary refinement between prev and p.
-                vec3 lo = prev, hi = p;
-                for (int j = 0; j < 6; j++) {
-                    vec3 mid = 0.5 * (lo + hi);
-                    if (mid.z > texture(depthTex, mid.xy).r) hi = mid; else lo = mid;
-                }
-                r.hit = true;
-                r.uv = hi.xy;
-                vec2 edge = smoothstep(vec2(0.0), vec2(0.06), hi.xy) * (1.0 - smoothstep(vec2(0.94), vec2(1.0), hi.xy));
-                float facing = 1.0 - smoothstep(0.55, 0.95, viewDir.z);
-                r.confidence = edge.x * edge.y * facing;
-                return r;
+    // Interpolate 1/z for perspective-correct depth along the screen segment.
+    float invZ0 = 1.0 / viewPos.z, invZ1 = 1.0 / endView.z;
+    float prevT = 0.0;
+    float stepScale = 1.0 / float(steps);
+    for (int i = 1; i <= 64; i++) {
+        if (i > steps) break;
+        // Steps grow quadratically: fine near the surface, coarse far away.
+        float t = tMax * sq((float(i) - 1.0 + noise) * stepScale);
+        vec2 uv = s0.xy + d * t;
+        float rayZ = 1.0 / mix(invZ0, invZ1, t);       // view-space z (negative)
+        float sceneD = texture(depthTex, uv).r;
+        if (sceneD >= 1.0) { prevT = t; continue; }
+        float sceneZ = screenToView(uv, sceneD, gbufferProjectionInverse).z;
+        float behind = sceneZ - rayZ;                   // > 0 when the ray is behind the surface
+        float thickness = 0.25 + abs(rayZ) * 0.04;
+        if (behind > 0.0 && behind < thickness) {
+            // Binary refinement between prevT and t.
+            float a = prevT, b = t;
+            for (int k = 0; k < 5; k++) {
+                float m = 0.5 * (a + b);
+                vec2 muv = s0.xy + d * m;
+                float mz = 1.0 / mix(invZ0, invZ1, m);
+                float sz = screenToView(muv, texture(depthTex, muv).r, gbufferProjectionInverse).z;
+                if (sz - mz > 0.0) b = m; else a = m;
             }
+            h.uv = s0.xy + d * b;
+            vec2 edge = smoothstep(0.0, 0.08, h.uv) * smoothstep(0.0, 0.08, 1.0 - h.uv);
+            h.confidence = edge.x * edge.y * saturate(1.0 - viewDir.z * 2.0);
+            h.dist = length(screenToView(h.uv, texture(depthTex, h.uv).r, gbufferProjectionInverse) - viewPos);
+            return h;
         }
-        prev = p;
+        prevT = t;
     }
-    return r;
+    return h;
 }
 
 #endif

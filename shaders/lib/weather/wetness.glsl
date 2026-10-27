@@ -1,114 +1,65 @@
-#ifndef WEATHER_WETNESS_GLSL
-#define WEATHER_WETNESS_GLSL
-#include "/lib/core/common.glsl"
-#include "/lib/core/frame_state.glsl"
-#include "/lib/material/labpbr.glsl"
+#ifndef MERIDIAN_WETNESS
+#define MERIDIAN_WETNESS
 
-// Rain on surfaces (ORIGINAL_ARCHITECTURE.md sec. 17).
-// * Wetness: only where rain reaches (open sky light, precipitation biome, not snow) and more
-//   on up-facing faces; it accumulates and dries with Minecraft's smoothed `wetness`.
-// * Porous materials (LabPBR porosity) darken as they absorb water; non-porous ones gain a
-//   water film and become smoother. Nothing becomes a mirror except puddles.
-// * Puddles: low-frequency noise on up-facing surfaces, controlled by PUDDLE_AMOUNT.
-// * Ripples: procedural rings from raindrops on puddles and water.
+// Rain wetness and puddles, applied to the decoded material in the deferred lighting pass.
+//
+// * Exposure: only surfaces open to the sky get wet (vanilla sky light 14-15).
+// * Drying: Iris's `wetness` uniform rises during rain and decays afterwards (wetnessHalflife /
+//   drynessHalflife), giving gradual wetting and drying.
+// * Porous materials (LabPBR porosity) absorb water: they darken (water fills pores and raises
+//   the effective refractive index, Lekner & Dorf 1988) and stay rough; non-porous materials
+//   gain a water film that makes them glossier.
+// * Puddles form on upward faces where low-frequency noise and the LabPBR height map are low,
+//   growing as wetness rises; they are mirror-flat water with rain ripples.
 
-#include "/lib/core/textures.glsl"
-#if RAIN_RIPPLE_SOURCE == 1
-    #include "/lib/halcyon/halcyon_rain.glsl"
-#endif
+const float wetnessHalflife = 300.0;
+const float drynessHalflife = 120.0;
 
-float rainReach(vec3 geoNormal, float skyLight) {
-    float open = smoothstep(0.86, 0.97, skyLight);
-    float facing = mix(0.35, 1.0, smoothstep(-0.2, 0.7, geoNormal.y));
-    float climate = biomePrecipSmooth * (1.0 - biomeSnowSmooth);
-    return open * facing * climate;
+float puddleNoise(vec2 xz) {
+    float n = valueNoise(xz * 0.07) * 0.6 + valueNoise(xz * 0.21 + 13.7) * 0.3 + valueNoise(xz * 0.63 - 4.1) * 0.1;
+    return n;
 }
 
-float surfaceWetness(vec3 geoNormal, float skyLight) {
-    #ifdef WETNESS
-        return saturate(fsWeather.x * rainReach(geoNormal, skyLight));
-    #else
-        return 0.0;
-    #endif
-}
+// Returns the puddle coverage (0..1) and modifies material and normal in place.
+float applyWetness(inout Material m, inout vec3 n, vec3 geoN, vec2 lm, vec3 worldPos, int flags, float height) {
+    #ifdef WET_SURFACES
+    float exposed = smoothstep(0.86, 0.96, lm.y);
+    float wet = saturate(wetness * 1.2) * exposed * biomeWet;
+    if (wet <= 0.001) return 0.0;
+    float up = saturate(geoN.y * 1.25 - 0.25);
+    float film = wet * mix(0.35, 1.0, up);
 
-// Puddles collect on solid up-facing surfaces. Not on foliage and plants (water runs off),
-// sand (drains), snow, ice or glass. Before, any up-facing face could hold one, leaf tops too.
-bool canHoldPuddle(int material) {
-    return !isFoliage(material) && material != MAT_SAND && material != MAT_SNOW && material != MAT_ICE
-        && material != MAT_GLASS && material != MAT_GLASS_STAINED && material != MAT_WATER;
-}
+    // Porous darkening and gloss.
+    float poro = m.porosity;
+    m.albedo = mix(m.albedo, pow(m.albedo, vec3(1.0 + 1.4 * poro)) * (1.0 - 0.25 * poro), film);
+    float glossTarget = mix(0.03, m.alpha, poro * 0.85);
+    m.alpha = mix(m.alpha, glossTarget, film * (1.0 - poro * 0.6));
+    if (!m.metal) m.f0 = mix(m.f0, max(m.f0, vec3(0.02)), film);
 
-float puddleMask(vec3 worldPos, vec3 geoNormal, float wet, int material) {
-    #if defined WETNESS && defined PUDDLES
-        if (geoNormal.y < 0.95 || wet <= 0.0 || !canHoldPuddle(material)) return 0.0;
-        vec2 xz = mod(worldPos.xz, 16384.0);
-        float n = texture(noise2dTex, xz / 96.0).r * 0.7 + texture(noise2dTex, xz / 23.0).g * 0.3;
-        float threshold = 1.0 - PUDDLE_AMOUNT * wet * 0.55;
-        return smoothstep(threshold, threshold + 0.06, n) * smoothstep(0.3, 0.8, wet);
-    #else
-        return 0.0;
-    #endif
-}
-
-// Slope of expanding rain-drop rings (blocks/block). Two layers of jittered cells, each with
-// its own drop period, so the pattern never visibly repeats.
-vec2 rainRippleSlope(vec2 xz, float time, float intensity) {
-    vec2 slope = vec2(0.0);
-    if (intensity <= 0.0) return slope;
-    for (int layer = 0; layer < 2; layer++) {
-        float scale = layer == 0 ? 2.6 : 1.7;
-        vec2 p = xz * scale + float(layer) * 17.3;
-        ivec2 base = ivec2(floor(p));
-        for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-            ivec2 c = base + ivec2(x, y);
-            vec2 h = hash22(c + ivec2(layer * 131, 7));
-            vec2 centre = vec2(c) + 0.15 + 0.7 * h;
-            float period = 0.85 + 0.6 * h.x;
-            float phase = fract(time / period + h.y);
-            vec2 d = p - centre;
-            float r = length(d);
-            float ring = r - phase * 1.1;
-            float w = 0.12;
-            if (abs(ring) > 3.0 * w) continue;
-            float amp = sq(1.0 - phase) * 0.06;
-            const float k = TAU / 0.22;
-            float env = exp(-sq(ring / w));
-            float dfdr = amp * (k * cos(k * ring) - 2.0 * ring / (w * w) * sin(k * ring)) * env;
-            slope += (d / max(r, 1e-3)) * dfdr * scale;
+    float puddle = 0.0;
+    #ifdef PUDDLES
+    if (!hasFlag(flags, FLAG_NO_PUDDLE) && up > 0.9) {
+        float level = wet * PUDDLE_AMOUNT;
+        float field = puddleNoise(worldPos.xz) * 0.8 + (1.0 - height) * 0.35;
+        float threshold = 1.05 - level * 0.75;
+        puddle = smoothstep(threshold - 0.08, threshold + 0.02, field) * up;
+        if (puddle > 0.0) {
+            m.albedo *= mix(1.0, 0.72, puddle);
+            m.alpha = mix(m.alpha, 0.0016, puddle);
+            if (!m.metal) m.f0 = mix(m.f0, vec3(0.02), puddle);
+            vec3 flatN = geoN;
+            #ifdef RAIN_RIPPLES
+            vec2 g = rainRippleGradient(worldPos.xz, frameTimeCounter) * rainStrength;
+            flatN = normalize(vec3(-g.x, 1.0, -g.y));
+            #endif
+            n = normalize(mix(n, flatN, puddle));
         }
     }
-    return slope * intensity * 0.05;
-}
-
-// Modifies a decoded material and its normal for rain. `worldPos` is absolute (for noise).
-// Ripple slope on standing water, from the selected source (Rain Ripple Source).
-vec2 rainRipples(vec3 worldPos, float skyLight) {
-    #if RAIN_RIPPLE_SOURCE == 1
-        return halcyonRainRippleSlope(worldPos.xz, length(worldPos - cameraPosition), skyLight);
-    #else
-        return rainRippleSlope(worldPos.xz, frameTimeCounter, fsWeather.z * rainReach(vec3(0.0, 1.0, 0.0), skyLight));
     #endif
-}
-
-void applyWetness(inout Material m, inout vec3 n, vec3 geoNormal, float wet, float puddle, vec3 worldPos, float skyLight) {
-    if (wet <= 0.0) return;
-    // Darkening from absorbed water, strongest for porous materials.
-    float darken = wet * mix(0.12, 0.5, m.porosity);
-    m.albedo *= 1.0 - darken;
-    // A thin film raises smoothness on non-porous surfaces.
-    float film = wet * (1.0 - 0.7 * m.porosity);
-    m.smoothness = mix(m.smoothness, max(m.smoothness, 0.72), film * 0.75);
-    if (puddle > 0.0) {
-        m.smoothness = mix(m.smoothness, 0.97, puddle);
-        if (!m.metal) m.f0 = mix(m.f0, vec3(0.02), puddle);
-        n = normalize(mix(n, geoNormal, puddle));
-        #ifdef RAIN_RIPPLES
-            vec2 s = rainRipples(worldPos, skyLight) * puddle;
-            n = normalize(n + vec3(-s.x, 0.0, -s.y));
-        #endif
-    }
-    m.roughness = max(sq(1.0 - m.smoothness), 0.0016);
+    return puddle;
+    #else
+    return 0.0;
+    #endif
 }
 
 #endif

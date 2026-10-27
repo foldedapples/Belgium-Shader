@@ -1,137 +1,152 @@
-#ifndef ATMOSPHERE_ATMOSPHERE_GLSL
-#define ATMOSPHERE_ATMOSPHERE_GLSL
-#include "/lib/core/common.glsl"
-#include "/lib/core/phase_functions.glsl"
+#ifndef MERIDIAN_ATMOSPHERE
+#define MERIDIAN_ATMOSPHERE
 
-// Physically based Earth-like atmosphere (ORIGINAL_ARCHITECTURE.md sec. 6). Distances in km.
-// Coefficients are standard measured values for clear air (Rayleigh at 680/550/440 nm, a
-// continental aerosol Mie layer, and the Chappuis-band ozone absorption).
+// Physically based single + multiple scattering atmosphere, after Hillaire 2020 ("A Scalable and
+// Production Ready Sky and Atmosphere Rendering Technique") and Bruneton & Neyret 2008, with Earth
+// parameters from those papers. Units: metres; 1 block = 1 m. LUTs are rebuilt every frame in
+// prepare (they are small), so haze can follow the weather.
+//
+// LUTs (custom images, see shaders.properties):
+//   transmittanceLut  256 x 64  RGBA16F  transmittance to the top of the atmosphere
+//   multiScatterLut    32 x 32  RGBA16F  isotropic multiple-scattering transfer (Hillaire 2020 sec. 5.5)
+//   skyViewLut        256 x 128 RGBA16F  sky radiance around the camera for sun + moon light
 
-const float ATM_GROUND = 6360.0;
-const float ATM_TOP    = 6460.0;
-const vec3  RAYLEIGH_SCATTERING = vec3(5.802e-3, 13.558e-3, 33.1e-3);
-const float RAYLEIGH_HEIGHT = 8.0;
-const float MIE_SCATTERING = 3.996e-3;
-const float MIE_EXTINCTION = 4.440e-3;
-const float MIE_HEIGHT = 1.2;
-const float MIE_G = 0.8;
-const vec3  OZONE_ABSORPTION = vec3(0.650e-3, 1.881e-3, 0.085e-3);
-const float OZONE_CENTER = 25.0;
-const float OZONE_HALF_WIDTH = 15.0;
-const vec3  GROUND_ALBEDO = vec3(0.12, 0.13, 0.1);
+const float PLANET_RADIUS = 6360e3;
+const float ATMOSPHERE_RADIUS = 6460e3;
+const vec3  RAYLEIGH_SCATTER = vec3(5.802e-6, 13.558e-6, 33.1e-6);
+const float RAYLEIGH_HEIGHT = 8000.0;
+const float MIE_SCATTER_BASE = 3.996e-6;
+const float MIE_ABSORB_BASE = 0.444e-6;
+const float MIE_HEIGHT = 1200.0;
+const vec3  OZONE_ABSORB = vec3(0.650e-6, 1.881e-6, 0.085e-6);
+const float OZONE_CENTER = 25000.0;
+const float OZONE_HALF_WIDTH = 15000.0;
+const vec3  GROUND_ALBEDO = vec3(0.30, 0.30, 0.28);
 
-// Top-of-atmosphere solar irradiance in scene units. Chosen so the sun disk radiance stays
-// inside RGBA16F range at the smallest BE_SUN_SIZE; every other light is defined relative to it.
-const float SUN_IRRADIANCE = 4.0;
-// Full-moon irradiance relative to the sun. Reality is ~2.5e-6; we compress the dynamic
-// range to 1/1500 so moonlit nights stay readable (documented artistic choice).
-const float MOON_IRRADIANCE_RATIO = 1.0 / 1500.0;
+const ivec2 TRANSMITTANCE_SIZE = ivec2(256, 64);
+const ivec2 MULTISCATTER_SIZE = ivec2(32, 32);
+const ivec2 SKYVIEW_SIZE = ivec2(256, 128);
 
-struct AtmosphereSample {
-    vec3  rayleigh;   // scattering
-    float mie;        // scattering
-    vec3  extinction;
+// Weather-dependent aerosol amount. Rain and thunder fill the low atmosphere with haze.
+float aerosolFactor() {
+    return HAZE_DENSITY * (1.0 + 2.5 * rainStrength + 1.5 * thunderStrength);
+}
+
+struct Medium {
+    vec3 rayleigh;   // scattering
+    float mie;       // scattering
+    vec3 extinction;
 };
 
-AtmosphereSample sampleAtmosphere(float altitude) {
-    altitude = max(altitude, 0.0);
-    float dr = exp(-altitude / RAYLEIGH_HEIGHT);
-    float dm = exp(-altitude / MIE_HEIGHT);
-    float doz = max(0.0, 1.0 - abs(altitude - OZONE_CENTER) / OZONE_HALF_WIDTH);
-    AtmosphereSample s;
-    s.rayleigh = RAYLEIGH_SCATTERING * dr;
-    s.mie = MIE_SCATTERING * dm;
-    s.extinction = s.rayleigh + MIE_EXTINCTION * dm + OZONE_ABSORPTION * doz;
-    return s;
+Medium mediumAt(float altitude, float aerosol) {
+    Medium m;
+    float h = max(altitude, 0.0);
+    float dr = exp(-h / RAYLEIGH_HEIGHT);
+    float dm = exp(-h / MIE_HEIGHT) * aerosol;
+    float dozone = max(0.0, 1.0 - abs(h - OZONE_CENTER) / OZONE_HALF_WIDTH);
+    m.rayleigh = RAYLEIGH_SCATTER * dr;
+    m.mie = MIE_SCATTER_BASE * dm;
+    m.extinction = m.rayleigh + vec3((MIE_SCATTER_BASE + MIE_ABSORB_BASE) * dm) + OZONE_ABSORB * dozone;
+    return m;
 }
 
-// Camera altitude above the virtual planet, in km. Minecraft sea level (63) is altitude 0.
-float cameraAltitudeKm(float worldY) {
-    return clamp((worldY - 62.0) * 1e-3, 0.0, ATM_TOP - ATM_GROUND - 0.5) + 0.0005;
+// Henyey-Greenstein phase function.
+float phaseHG(float c, float g) {
+    float g2 = g * g;
+    return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * c, 1.5));
 }
 
-// Distance along (r, mu) to the top of the atmosphere / ground (Bruneton notation).
-float distanceToTop(float r, float mu) {
-    float disc = r * r * (mu * mu - 1.0) + ATM_TOP * ATM_TOP;
-    return max(-r * mu + sqrt(max(disc, 0.0)), 0.0);
-}
-float distanceToGround(float r, float mu) {
-    float disc = r * r * (mu * mu - 1.0) + ATM_GROUND * ATM_GROUND;
-    return max(-r * mu - sqrt(max(disc, 0.0)), 0.0);
-}
-bool rayHitsGround(float r, float mu) {
-    return mu < 0.0 && r * r * (mu * mu - 1.0) + ATM_GROUND * ATM_GROUND >= 0.0;
+float phaseRayleigh(float c) { return 3.0 / (16.0 * PI) * (1.0 + c * c); }
+
+// Cornette-Shanks phase function (better behaved than plain Henyey-Greenstein near g = 0.8).
+float phaseMie(float c, float g) {
+    float g2 = g * g;
+    float denom = 1.0 + g2 - 2.0 * g * c;
+    return 3.0 / (8.0 * PI) * ((1.0 - g2) * (1.0 + c * c)) / ((2.0 + g2) * denom * sqrt(denom));
 }
 
-// ---- Transmittance LUT parameterisation (Bruneton 2017 style, our implementation) ----
-const vec2 TRANSMITTANCE_LUT_SIZE = vec2(256.0, 64.0);
-
-vec2 transmittanceLutUv(float r, float mu) {
-    float H = sqrt(ATM_TOP * ATM_TOP - ATM_GROUND * ATM_GROUND);
-    float rho = sqrt(max(r * r - ATM_GROUND * ATM_GROUND, 0.0));
-    float d = distanceToTop(r, mu);
-    float dMin = ATM_TOP - r;
+// ---- transmittance LUT parameterisation (Bruneton 2017 mapping) ----
+vec2 transmittanceUv(float r, float mu) {
+    float H = sqrt(ATMOSPHERE_RADIUS * ATMOSPHERE_RADIUS - PLANET_RADIUS * PLANET_RADIUS);
+    float rho = sqrt(max(r * r - PLANET_RADIUS * PLANET_RADIUS, 0.0));
+    float disc = r * r * (mu * mu - 1.0) + ATMOSPHERE_RADIUS * ATMOSPHERE_RADIUS;
+    float d = max(-r * mu + sqrt(max(disc, 0.0)), 0.0);
+    float dMin = ATMOSPHERE_RADIUS - r;
     float dMax = rho + H;
-    float xMu = (d - dMin) / max(dMax - dMin, EPSILON);
-    float xR = rho / H;
-    // Keep samples on texel centres at the edges.
-    vec2 uv = vec2(xMu, xR);
-    return (uv * (TRANSMITTANCE_LUT_SIZE - 1.0) + 0.5) / TRANSMITTANCE_LUT_SIZE;
+    return vec2((d - dMin) / (dMax - dMin), rho / H);
 }
 
-void transmittanceLutParams(vec2 uv, out float r, out float mu) {
-    vec2 x = (uv * TRANSMITTANCE_LUT_SIZE - 0.5) / (TRANSMITTANCE_LUT_SIZE - 1.0);
-    x = saturate(x);
-    float H = sqrt(ATM_TOP * ATM_TOP - ATM_GROUND * ATM_GROUND);
-    float rho = H * x.y;
-    r = sqrt(rho * rho + ATM_GROUND * ATM_GROUND);
-    float dMin = ATM_TOP - r;
+void transmittanceRMu(vec2 uv, out float r, out float mu) {
+    float H = sqrt(ATMOSPHERE_RADIUS * ATMOSPHERE_RADIUS - PLANET_RADIUS * PLANET_RADIUS);
+    float rho = H * uv.y;
+    r = sqrt(rho * rho + PLANET_RADIUS * PLANET_RADIUS);
+    float dMin = ATMOSPHERE_RADIUS - r;
     float dMax = rho + H;
-    float d = dMin + x.x * (dMax - dMin);
+    float d = dMin + uv.x * (dMax - dMin);
     mu = d == 0.0 ? 1.0 : (H * H - rho * rho - d * d) / (2.0 * r * d);
     mu = clamp(mu, -1.0, 1.0);
 }
 
-// Numerical optical depth from (r, mu) to the top of the atmosphere.
-vec3 opticalDepthToTop(float r, float mu, int steps) {
-    float len = distanceToTop(r, mu);
-    float dt = len / float(steps);
-    vec3 od = vec3(0.0);
-    for (int i = 0; i < steps; i++) {
-        float t = (float(i) + 0.5) * dt;
-        float ri = sqrt(r * r + t * t + 2.0 * r * mu * t);
-        od += sampleAtmosphere(ri - ATM_GROUND).extinction * dt;
-    }
-    return od;
+// Distance from radius r along direction cosine mu to the top of the atmosphere / the ground.
+float distanceToTop(float r, float mu) {
+    float disc = r * r * (mu * mu - 1.0) + ATMOSPHERE_RADIUS * ATMOSPHERE_RADIUS;
+    return max(-r * mu + sqrt(max(disc, 0.0)), 0.0);
 }
 
-// Analytic-free fallback transmittance for stages without the LUT (Nether/End begin).
-vec3 transmittanceNumeric(float r, float mu) {
-    if (rayHitsGround(r, mu)) return vec3(0.0);
-    return exp(-opticalDepthToTop(r, mu, 24));
+bool rayHitsGround(float r, float mu) {
+    return mu < 0.0 && r * r * (mu * mu - 1.0) + PLANET_RADIUS * PLANET_RADIUS >= 0.0;
 }
 
-#ifdef ATMOSPHERE_LUTS
-uniform sampler2D transmittanceLutTex;
-uniform sampler2D multiScatterLutTex;
+// Camera radius from world height (sea level at y = 63).
+float cameraRadius(float worldY) {
+    return PLANET_RADIUS + clamp(worldY - 62.0, 1.0, 60000.0);
+}
+
+#ifdef ATMOSPHERE_SAMPLERS
+uniform sampler2D transmittanceLutSampler;
+uniform sampler2D multiScatterLutSampler;
+uniform sampler2D skyViewLutSampler;
 
 vec3 transmittanceToTop(float r, float mu) {
     if (rayHitsGround(r, mu)) return vec3(0.0);
-    return texture(transmittanceLutTex, transmittanceLutUv(r, mu)).rgb;
+    vec2 uv = transmittanceUv(r, mu);
+    uv = (uv * vec2(TRANSMITTANCE_SIZE - 1) + 0.5) / vec2(TRANSMITTANCE_SIZE);
+    return texture(transmittanceLutSampler, uv).rgb;
 }
 
-// Transmittance to the sun including the soft planet-shadow terminator across the solar disk.
-vec3 sunTransmittance(float r, float muS, float sunRadius) {
-    float horizonMu = -sqrt(max(1.0 - sq(ATM_GROUND / r), 0.0));
-    float visible = smoothstep(-sunRadius, sunRadius, asin(clamp(muS, -1.0, 1.0)) - asin(clamp(horizonMu, -1.0, 1.0)));
-    return texture(transmittanceLutTex, transmittanceLutUv(r, max(muS, horizonMu + 1e-4))).rgb * visible;
+vec3 multiScatter(float r, float muSun) {
+    vec2 uv = vec2(muSun * 0.5 + 0.5, saturate((r - PLANET_RADIUS) / (ATMOSPHERE_RADIUS - PLANET_RADIUS)));
+    uv = (uv * vec2(MULTISCATTER_SIZE - 1) + 0.5) / vec2(MULTISCATTER_SIZE);
+    return texture(multiScatterLutSampler, uv).rgb;
 }
 
-const vec2 MULTISCATTER_LUT_SIZE = vec2(32.0, 32.0);
-vec3 multiScatter(float r, float muS) {
-    vec2 uv = vec2(muS * 0.5 + 0.5, (r - ATM_GROUND) / (ATM_TOP - ATM_GROUND));
-    uv = (uv * (MULTISCATTER_LUT_SIZE - 1.0) + 0.5) / MULTISCATTER_LUT_SIZE;
-    return texture(multiScatterLutTex, uv).rgb;
+// Sky-view LUT: azimuth (world) along x, elevation along y with samples concentrated at the
+// horizon (Hillaire 2020 sec. 5.3).
+vec2 skyViewUv(vec3 dir) {
+    float el = asin(clamp(dir.y, -1.0, 1.0));
+    float v = 0.5 + 0.5 * sign(el) * sqrt(abs(el) / HALF_PI);
+    float u = atan(dir.z, dir.x) / TAU + 0.5;
+    return vec2(u, v);
+}
+
+vec3 skyViewDir(vec2 uv) {
+    float s = uv.y * 2.0 - 1.0;
+    float el = sign(s) * s * s * HALF_PI;
+    float az = (uv.x - 0.5) * TAU;
+    return vec3(cos(el) * cos(az), sin(el), cos(el) * sin(az));
+}
+
+vec3 sampleSkyView(vec3 dir) {
+    vec2 uv = skyViewUv(dir);
+    uv.y = (uv.y * float(SKYVIEW_SIZE.y - 1) + 0.5) / float(SKYVIEW_SIZE.y);
+    // Azimuth wraps: the image clamps, so blend across the seam manually.
+    float x = uv.x * float(SKYVIEW_SIZE.x) - 0.5;
+    float x0 = floor(x);
+    float f = x - x0;
+    float xa = mod(x0, float(SKYVIEW_SIZE.x)), xb = mod(x0 + 1.0, float(SKYVIEW_SIZE.x));
+    vec3 a = texture(skyViewLutSampler, vec2((xa + 0.5) / float(SKYVIEW_SIZE.x), uv.y)).rgb;
+    vec3 b = texture(skyViewLutSampler, vec2((xb + 0.5) / float(SKYVIEW_SIZE.x), uv.y)).rgb;
+    return mix(a, b, f);
 }
 #endif
 

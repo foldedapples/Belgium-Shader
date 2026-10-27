@@ -1,110 +1,121 @@
-#ifndef WATER_WAVES_GLSL
-#define WATER_WAVES_GLSL
-#include "/lib/core/common.glsl"
-#include "/lib/core/frame_state.glsl"
+#ifndef MERIDIAN_WAVES
+#define MERIDIAN_WAVES
 
-// Layer A: analytic wind waves (ORIGINAL_ARCHITECTURE.md sec. 8.1).
+// Surface waves as a sum of directional trains drawn from a wind-sea spectrum, plus advected
+// gradient-noise chop. Each train obeys deep-water dispersion (omega^2 = g k). Amplitudes come
+// from a steepness budget so the summed slope never exceeds a limit (no spikes or folds).
 //
-// N trochoidal components. Wavelengths are a geometric series from 1.7x the spectral peak
-// down to ~0.3 blocks; the peak follows the Pierson-Moskowitz relation omega_p = 0.877 g / U,
-// so higher wind gives longer, taller waves. Each component obeys deep-water dispersion
-// omega = sqrt(g k). Directions spread around the wind with a golden-angle sequence (never a
-// repeating pattern), wider for short waves. Steepness is shaped per band so the summed
-// Gerstner steepness stays below 1 (no looping crests).
-//
-// waveSurface() returns the height, slope and Hessian, all analytic. Components whose
-// wavelength is shorter than ~2 pixel footprints are faded out (no shimmer at distance).
+// Water bodies differ through WaterParams: open ocean gets long swells, lakes get only short
+// wind ripples, flowing water gets chop advected down-slope, storms raise everything.
 
-const float GRAVITY = 9.81;
-
-struct WaveSample {
-    float height;
-    vec2  slope;    // dh/dx, dh/dz
-    vec3  hessian;  // d2h/dx2, d2h/dz2, d2h/dxdz
+struct WaterParams {
+    float swell;     // 0..1 long-wave energy (ocean, open water)
+    float chop;      // 0..1 short wind waves
+    float calm;      // 0..1 sheltered water suppresses everything but ripples
+    vec2  flow;      // world-space flow velocity in blocks/second (flowing water)
+    vec2  wind;      // unit wind direction
+    float storm;     // 0..1 thunder
 };
 
-float windSpeed() {
-    // Storms raise the wind; WATER_WIND_SPEED is the fair-weather value in m/s.
-    return WATER_WIND_SPEED * (1.0 + 0.6 * fsWeather.z + 1.1 * fsWeather.y);
+const float GRAVITY = 9.81;
+const int WAVE_TRAINS = 12;
+
+// Deterministic per-train parameters: direction spread around the wind, wavelength ladder.
+void waveTrain(int i, WaterParams p, out vec2 dir, out float k, out float amp, out float phase0) {
+    float fi = float(i);
+    float u = fract(fi * 0.618034 + 0.13);
+    // Spread grows for shorter waves (they respond to gusts, long swells are coherent).
+    float lambdaMax = mix(9.0, 46.0, p.swell);
+    float lambdaMin = 0.55;
+    float lambda = lambdaMax * pow(lambdaMin / lambdaMax, fi / float(WAVE_TRAINS - 1));
+    float spread = mix(0.35, 1.25, fi / float(WAVE_TRAINS - 1));
+    float ang = (u * 2.0 - 1.0) * spread + (fract(fi * 0.371) - 0.5) * 0.25;
+    dir = rotate2d(ang) * p.wind;
+    k = TAU / lambda;
+    // Steepness budget: long waves only exist with swell, short ones with chop.
+    float longness = 1.0 - fi / float(WAVE_TRAINS - 1);
+    float energy = mix(p.chop, p.swell, longness * longness);
+    energy *= mix(1.0, 0.25, p.calm * longness);
+    energy *= 1.0 + 0.9 * p.storm;
+    float steep = 0.075 * energy;             // k * A per train
+    amp = steep / k;
+    phase0 = fi * 2.399963;                   // golden angle decorrelates trains
 }
 
-vec2 windDirection() {
-    float a = radians(WATER_WIND_ANGLE);
-    return vec2(cos(a), sin(a));
-}
-
-// `openness` 0..1: 1 open ocean, ~0.3 rivers and small lakes. `footprint`: world size of a
-// pixel at the sample (0 for no filtering).
-WaveSample waveSurface(vec2 xz, float t, float openness, float footprint) {
-    WaveSample w;
-    w.height = 0.0; w.slope = vec2(0.0); w.hessian = vec3(0.0);
-
-    float U = windSpeed();
-    float omegaP = 0.877 * GRAVITY / max(U, 0.5);
-    float kPeak = omegaP * omegaP / GRAVITY;
-    float lambdaPeak = min(TAU / kPeak, 48.0);
-    // Sheltered water has short fetch: its longest waves stay small.
-    float lambdaMax = mix(min(lambdaPeak * 1.7, 9.0), min(lambdaPeak * 1.7, 80.0), openness);
-    const float lambdaMin = 0.3;
-    vec2 wind = windDirection();
-    float windAngle = atan(wind.y, wind.x);
-
-    const int N = WATER_WAVE_COUNT;
-    float ratio = pow(lambdaMin / lambdaMax, 1.0 / float(N - 1));
-
-    // Pass 1: spectral shape (log-normal around the peak plus a capillary floor).
-    float shapeSum = 0.0;
-    float lambda = lambdaMax;
-    for (int i = 0; i < N; i++) {
-        shapeSum += exp(-0.6 * sq(log(lambda / lambdaPeak))) + 0.25;
-        lambda *= ratio;
+// Height (blocks, ~zero mean) and gradient d(h)/d(xz) at a world position.
+vec3 waveHeightGrad(vec2 xz, float t, WaterParams p) {
+    float h = 0.0;
+    vec2 g = vec2(0.0);
+    t *= WAVE_SPEED;
+    vec2 pos = xz - p.flow * t;
+    for (int i = 0; i < WAVE_TRAINS; i++) {
+        vec2 d; float k, a, ph;
+        waveTrain(i, p, d, k, a, ph);
+        float w = sqrt(GRAVITY * k);
+        float x = k * dot(d, pos) - w * t + ph;
+        // Trochoid-like crest sharpening: sin plus a small second harmonic (keeps slopes bounded).
+        float s = sin(x), c = cos(x);
+        float sharp = 0.25 * min(k * a * 6.0, 1.0);
+        h += a * (s + sharp * (0.5 - 0.5 * cos(2.0 * x)));
+        float dh = a * k * (c + sharp * sin(2.0 * x));
+        g += dh * d;
     }
-    // Total Gerstner steepness stays well below 1 so crests never fold.
-    float totalSteepness = 0.7 * WATER_WAVE_HEIGHT * mix(0.45, 1.0, openness);
-    float scale = min(totalSteepness, 0.95) / shapeSum;
+    // Advected chop: two octaves of gradient noise drifting with the wind, for small detail that
+    // never repeats.
+    vec2 q = pos * 0.9 + p.wind * t * 0.6;
+    vec3 n1 = gradientNoiseD(q);
+    vec3 n2 = gradientNoiseD(q * 2.3 + vec2(17.0, -9.0) - p.wind * t * 0.4);
+    float detail = (0.022 + 0.03 * p.chop + 0.03 * p.storm) * (1.0 - 0.5 * p.calm);
+    h += detail * (n1.x + 0.45 * n2.x);
+    g += detail * (n1.yz * 0.9 + 0.45 * n2.yz * 2.07);
+    return vec3(h * WAVE_HEIGHT, g * WAVE_HEIGHT);
+}
 
-    // Pass 2: synthesis.
-    lambda = lambdaMax;
-    for (int i = 0; i < N; i++) {
-        float k = TAU / lambda;
-        float fi = float(i) / float(N - 1);
-        // Angular spread widens for short waves; golden-angle offsets avoid regular patterns.
-        float spread = mix(0.35, 1.25, fi);
-        float offset = (fract(float(i) * 0.61803398875 + 0.17) * 2.0 - 1.0) * spread;
-        float ang = windAngle + offset;
-        vec2 dir = vec2(cos(ang), sin(ang));
-        float s = (exp(-0.6 * sq(log(lambda / lambdaPeak))) + 0.25) * scale;
-        float amp = s / k;
-        // Anti-aliasing: fade components narrower than ~2.5 pixels.
-        float aa = footprint > 0.0 ? 1.0 - smoothstep(0.4, 1.0, footprint * 2.5 / lambda) : 1.0;
-        amp *= aa;
-        if (amp > 0.0) {
-            float omega = sqrt(GRAVITY * k) * WATER_WAVE_SPEED;
-            float phase = fract(float(i) * 0.7548776662) * TAU;
-            float theta = k * dot(dir, xz) - omega * t + phase;
-            float sn = sin(theta), cs = cos(theta);
-            // Sharpen crests toward a trochoid profile without folding.
-            float crest = 1.0 + 0.6 * s * (1.0 + sn);
-            w.height += amp * sn * crest;
-            w.slope += dir * (amp * k * cs * crest);
-            w.hessian += vec3(dir.x * dir.x, dir.y * dir.y, dir.x * dir.y) * (-amp * k * k * sn);
-        }
-        lambda *= ratio;
+// Low-frequency part only, for vertex displacement (cheap, no aliasing at one vertex per block).
+float waveSwellHeight(vec2 xz, float t, WaterParams p) {
+    float h = 0.0;
+    t *= WAVE_SPEED;
+    vec2 pos = xz - p.flow * t;
+    for (int i = 0; i < 4; i++) {
+        vec2 d; float k, a, ph;
+        waveTrain(i, p, d, k, a, ph);
+        float w = sqrt(GRAVITY * k);
+        h += a * sin(k * dot(d, pos) - w * t + ph);
     }
-    return w;
+    return h * WAVE_HEIGHT;
 }
 
-// How exposed a water surface is to wind fetch: oceans are open, rivers and enclosed ponds
-// (low sky light) are calm. Biome factors are smoothed custom uniforms (shaders.properties).
-float waterOpenness(float skyLight) {
-    float biome = mix(0.35, 1.0, biomeOceanSmooth) * (1.0 - 0.5 * biomeRiverSmooth);
-    return biome * smoothstep(0.55, 1.0, skyLight);
+float waveSwellAmplitude(WaterParams p) {
+    float s = 0.0;
+    for (int i = 0; i < 4; i++) {
+        vec2 d; float k, a, ph;
+        waveTrain(i, p, d, k, a, ph);
+        s += a;
+    }
+    return s * WAVE_HEIGHT;
 }
 
-vec3 waveNormal(vec2 slope) { return normalize(vec3(-slope.x, 1.0, -slope.y)); }
-
-// Wave clock in seconds; frameTimeCounter wraps hourly, which is acceptable for waves whose
-// periods are a few seconds (a one-off phase jump once per hour of play).
-float waveTime() { return frameTimeCounter; }
+// Parameters for a water fragment from what a shader can know about it.
+//   normal   geometric water-surface normal (tilted when the water flows)
+//   skyLight 0..1 vanilla sky light at the surface (open water vs. caves and pools)
+WaterParams waterParamsAt(vec3 normal, float skyLight) {
+    WaterParams p;
+    p.wind = windDirection();
+    p.storm = thunderStrength;
+    float open = smoothstep(0.55, 0.95, skyLight);
+    p.swell = open * mix(0.12, 1.0, biomeOcean) * (1.0 - 0.6 * biomeRiver) * (1.0 - 0.6 * biomeSwamp);
+    p.chop = mix(0.25, 0.75, open) * (0.6 + 0.4 * windStrength()) + 0.3 * rainStrength;
+    p.calm = (1.0 - open) * 0.8 + biomeSwamp * 0.5;
+    p.flow = vec2(0.0);
+    float slope = length(normal.xz);
+    if (slope > 0.02) {
+        p.flow = normalize(normal.xz) * min(slope * 9.0, 2.5);
+        p.chop = max(p.chop, 0.55);
+        p.swell *= 0.2;
+    } else if (biomeRiver > 0.01) {
+        p.flow = p.wind * 0.35 * biomeRiver;
+    }
+    return p;
+}
 
 #endif

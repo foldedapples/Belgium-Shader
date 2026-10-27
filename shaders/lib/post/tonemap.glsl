@@ -1,55 +1,74 @@
-#ifndef POST_TONEMAP_GLSL
-#define POST_TONEMAP_GLSL
-#include "/lib/core/color.glsl"
+#ifndef MERIDIAN_TONEMAP
+#define MERIDIAN_TONEMAP
 
-// Belgium filmic curve: rational f(x) = x(x+b) / (x(x+c)+d), asymptote 1.
-// Coefficients were least-squares fitted to anchor points chosen for this pack:
-// 0.18 -> 0.168 (mid grey kept near scene-referred),
-// 1.0 -> 0.62, 4.0 -> 0.90, 16 -> 0.98. Near-linear toe; contrast is a separate grade step.
-const float TM_B = 0.65;
-const float TM_C = 0.98;
-const float TM_D = 0.68;
+// Display transforms. Input: exposed linear Rec.709 scene radiance. Output: linear display
+// values in [0,1] (the final pass applies the sRGB transfer function).
 
-float filmicCurve(float x) { x = max(x, 0.0); return x * (x + TM_B) / (x * (x + TM_C) + TM_D); }
-vec3  filmicCurve(vec3 x)  { x = max(x, vec3(0.0)); return x * (x + TM_B) / (x * (x + TM_C) + TM_D); }
+// ---- 0: Meridian filmic (this project's own curve).
+// Tone curve: the Naka-Rushton photoreceptor response y = x^c / (x^c + s^c) (Naka & Rushton
+// 1966), c = 1.25, s chosen so middle grey 0.18 maps to ~0.19, normalised so 16x middle grey
+// reaches white. It is applied to the largest channel and the colour is scaled with it, which
+// keeps hue and saturation exactly (a per-channel curve turns bright orange lava yellow: measured
+// 29 degrees of hue drift in tools/preview/tests.html). Real film and eyes still see very bright
+// light go towards white, so in the shoulder the colour is mixed towards neutral of the same
+// value; mixing with grey changes saturation but never hue.
+float nakaRushton(float x) {
+    const float C = 1.25;
+    const float SC = 0.49983;     // 0.18^C * (1/0.19 - 1)
+    const float WC = 32.0;        // 16^C
+    float xc = pow(max(x, 0.0), C);
+    return (xc / (xc + SC)) / (WC / (WC + SC));
+}
 
-// Blend of a per-channel curve (natural highlight desaturation, mild hue shift of hot colours)
-// and a luminance-ratio curve (hue preserving). The ratio path is pulled to white as its
-// luminance approaches display white so saturated lights never clip to flat primaries.
-vec3 tonemapFilmic(vec3 c) {
-    vec3 perChannel = filmicCurve(c);
+vec3 meridianFilmic(vec3 x) {
+    x = max(x, 0.0);
+    float n = maxOf(x);
+    if (n <= 1e-8) return vec3(0.0);
+    float y = min(nakaRushton(n), 1.0);
+    vec3 c = x * (y / n);
+    // Path to white in the shoulder (display values above ~0.6).
+    float s = smoothstep(0.6, 1.0, y);
+    c = mix(c, vec3(y), s * s * 0.9);
+    return saturate(c);
+}
+
+// ---- 1: Khronos PBR Neutral tone mapper (Copyright 2024 The Khronos Group Inc.,
+// Apache License 2.0; https://github.com/KhronosGroup/ToneMapping). Reimplemented from the
+// published specification; see THIRD_PARTY_NOTICES.md.
+vec3 khronosPbrNeutral(vec3 color) {
+    const float startCompression = 0.8 - 0.04;
+    const float desaturation = 0.15;
+    float x = min(color.r, min(color.g, color.b));
+    float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+    color -= offset;
+    float peak = max(color.r, max(color.g, color.b));
+    if (peak < startCompression) return color;
+    const float d = 1.0 - startCompression;
+    float newPeak = 1.0 - d * d / (peak + d - startCompression);
+    color *= newPeak / peak;
+    float g = 1.0 - 1.0 / (desaturation * (peak - newPeak) + 1.0);
+    return mix(color, newPeak * vec3(1.0), g);
+}
+
+// ---- 2: extended Reinhard on luminance (Reinhard et al. 2002) with a white point, hue preserved.
+vec3 reinhardLuminance(vec3 c) {
+    const float WHITE = 12.0;
     float l = luminance(c);
-    float lt = filmicCurve(l);
-    vec3 ratio = c * (lt / max(l, 1e-6));
-    float whiteMix = smoothstep(0.55, 1.0, lt);
-    ratio = mix(ratio, vec3(lt), whiteMix);
-    vec3 outC = mix(perChannel, ratio, 0.45);
-    return saturate(outC);
+    float ld = l * (1.0 + l / (WHITE * WHITE)) / (1.0 + l);
+    vec3 o = c * (ld / max(l, 1e-6));
+    // Bleed over-range channels into the others so bright colours go towards white smoothly.
+    float over = max(maxOf(o) - 1.0, 0.0);
+    return saturate(o + over * 0.5);
 }
 
-// Cinematic: the same shoulder with a deeper toe - scene contrast is expanded around middle
-// grey in log space before the curve (shadows sink, highlights roll off later).
-vec3 tonemapCinematic(vec3 c) {
-    float l = max(luminance(c), 1e-7);
-    float expanded = 0.18 * pow(l / 0.18, 1.12);
-    return tonemapFilmic(c * (expanded / l));
-}
-
-// Neutral: fully hue-preserving (luminance curve applied to the colour ratio), with a gentle
-// path to white; keeps saturated lights saturated, as the Fantasy profile wants.
-vec3 tonemapNeutral(vec3 c) {
-    float l = luminance(c);
-    float lt = filmicCurve(l);
-    vec3 r = c * (lt / max(l, 1e-6));
-    float over = maxOf(r);
-    if (over > 1.0) r = mix(r / over, vec3(1.0), saturate((over - 1.0) * 0.5));
-    return saturate(mix(r, vec3(lt), smoothstep(0.8, 1.0, lt) * 0.5));
-}
-
-vec3 tonemapSelected(vec3 c, int curve) {
-    if (curve == 1) return tonemapCinematic(c);
-    if (curve == 2) return tonemapNeutral(c);
-    return tonemapFilmic(c);
+vec3 tonemap(vec3 c) {
+    #if TONEMAP == 1
+    return saturate(khronosPbrNeutral(c));
+    #elif TONEMAP == 2
+    return reinhardLuminance(c);
+    #else
+    return meridianFilmic(c);
+    #endif
 }
 
 #endif

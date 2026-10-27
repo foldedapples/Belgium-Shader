@@ -1,0 +1,10 @@
+{
+ "stars": 42731,
+ "entries": 65535,
+ "catalogue_stars": 9096,
+ "map_scale": 2.1913424558867177e-05,
+ "milky_way_max": 0.011800541640808343,
+ "milky_way_sb_p99_mag_arcsec2": 20.8,
+ "milky_way_rescale": 0.022875818427387427,
+ "milky_way_raw_sb": 16.698441601888824
+}

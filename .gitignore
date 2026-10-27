@@ -4,3 +4,6 @@
 __pycache__/
 # raw downloads for asset preparation (tools/prep_*.py read them from here)
 /tools/raw/
+# local captures and logs
+*.log
+captures/

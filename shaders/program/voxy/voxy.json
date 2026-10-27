@@ -1,0 +1,9 @@
+{
+    "version": 1,
+    "opaqueDrawBuffers": [1, 2, 3],
+    "translucentDrawBuffers": [4, 5],
+    "uniforms": [],
+    "samplers": [],
+    "excludeLodsFromVanillaDepth": true,
+    "blending": "off"
+}
