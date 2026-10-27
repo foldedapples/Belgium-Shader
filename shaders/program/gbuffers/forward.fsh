@@ -52,7 +52,7 @@ void main() {
     vec3 lightIllum = vec3(0.0);
     ambient = netherAmbient(vec3(0.0, 1.0, 0.0), vPlayerPos + cameraPosition);
     #endif
-    vec3 block = blackbody(float(BLOCKLIGHT_TEMPERATURE)) * pow(lm.x, 2.6) * 4.0 * BLOCKLIGHT_STRENGTH;
+    vec3 block = blackbody(float(BLOCKLIGHT_TEMPERATURE)) * pow(lm.x, 2.6) * 1.6 * BLOCKLIGHT_STRENGTH;   // as blocklight.glsl
 
     #ifdef GBUF_WEATHER
     bool snow = biomeSnowy > 0.5;
@@ -62,7 +62,8 @@ void main() {
         // a diffuse colour, with a strong forward glint towards the sun or moon.
         #ifdef WORLD_OVERWORLD
         float glint = pow(saturate(dot(dir, L.lightDir)), 24.0) * 0.6;
-        vec3 c = ambient * PI * 0.55 + block * 0.6 + lightIllum * (glint * 0.02 + 0.004) * skyVisibility(lm.y);
+        // Streaks show ~40 % of the sky radiance: faint against the sky, visible against dark ground.
+        vec3 c = ambient * PI * 0.4 + block * 0.6 + lightIllum * (glint * 0.02 + 0.004) * skyVisibility(lm.y);
         // Lightning flashes light every drop.
         c += vec3(0.7, 0.75, 1.0) * lightningBoltPosition.w * 6.0;
         #else

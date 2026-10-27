@@ -190,6 +190,9 @@ option.RAIN_WIND_LEAN=Rain Wind Slant
 option.RAIN_RIPPLES=Rain Ripples
 option.PUDDLES=Puddles
 option.PUDDLE_AMOUNT=Puddle Amount
+option.PUDDLE_AMOUNT.comment=Share of open, level ground that collects water in heavy rain: about 8 % at 1.0, 3 % at 0.5, 20 % at 2.0.
+option.PUDDLE_SIZE=Puddle Size
+option.PUDDLE_SIZE.comment=Typical size of individual puddles (1.0: a few blocks across).
 
 option.MOON_TEXTURE=Moon Detail
 option.MOON_TEXTURE.comment=NASA LRO lunar colour and LOLA elevation maps. 8K uses more video memory.

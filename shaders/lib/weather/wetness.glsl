@@ -15,9 +15,20 @@
 const float wetnessHalflife = 300.0;
 const float drynessHalflife = 120.0;
 
+// Puddle field: domain-warped fractal value noise, so puddles are irregular (lobed, elongated,
+// merging) rather than round blobs. Feature size ~9 blocks at PUDDLE_SIZE 1.
 float puddleNoise(vec2 xz) {
-    float n = valueNoise(xz * 0.07) * 0.6 + valueNoise(xz * 0.21 + 13.7) * 0.3 + valueNoise(xz * 0.63 - 4.1) * 0.1;
-    return n;
+    vec2 w = vec2(valueNoise(xz * 0.05), valueNoise(xz * 0.05 + vec2(31.7, 11.3))) * 2.0 - 1.0;
+    vec2 p = xz * (0.11 / PUDDLE_SIZE) + w * 1.2;
+    return valueNoise(p) * 0.65 + valueNoise(p * 2.7 + vec2(5.1, -3.3)) * 0.25 + valueNoise(p * 7.3) * 0.10;
+}
+
+// Threshold for a share of ground covered: calibrated on the field above (tools/tests and
+// docs/REGRESSION_AUDIT.md): 0.726 covers 8 %, each doubling of PUDDLE_AMOUNT adds ~2.5x area.
+// The old rule (field 0.8 x noise against 1.05 - 0.75 x wetness) covered 77 % of open ground.
+float puddleThreshold(float wet) {
+    float full = 0.726 - 0.085 * log2(PUDDLE_AMOUNT);
+    return full + (1.0 - wet) * 0.25;          // puddles grow in as the ground soaks
 }
 
 // Returns the puddle coverage (0..1) and modifies material and normal in place. `playerPos` is the
@@ -33,17 +44,19 @@ float applyWetness(inout Material m, inout vec3 n, vec3 geoN, vec2 lm, vec3 play
     // Porous darkening and gloss.
     float poro = m.porosity;
     m.albedo = mix(m.albedo, pow(m.albedo, vec3(1.0 + 1.4 * poro)) * (1.0 - 0.25 * poro), film);
-    float glossTarget = mix(0.03, m.alpha, poro * 0.85);
+    // A wet film is a sheen, not a mirror (alpha >= 0.09, perceptual roughness ~0.3); only puddles
+    // become mirror-flat. At 0.03 every wet surface without porosity data turned glassy.
+    float glossTarget = mix(min(m.alpha, 0.09), m.alpha, poro * 0.85);
     m.alpha = mix(m.alpha, glossTarget, film * (1.0 - poro * 0.6));
     if (!m.metal) m.f0 = mix(m.f0, max(m.f0, vec3(0.02)), film);
 
     float puddle = 0.0;
     #ifdef PUDDLES
     if (!hasFlag(flags, FLAG_NO_PUDDLE) && up > 0.9) {
-        float level = wet * PUDDLE_AMOUNT;
-        float field = puddleNoise(worldPos.xz) * 0.8 + (1.0 - height) * 0.35;
-        float threshold = 1.05 - level * 0.75;
-        puddle = smoothstep(threshold - 0.08, threshold + 0.02, field) * up;
+        // LabPBR height lowers the threshold in the texture's recesses (1 = flat / no height map).
+        float field = puddleNoise(worldPos.xz) + (1.0 - height) * 0.15;
+        float threshold = puddleThreshold(wet);
+        puddle = smoothstep(threshold - 0.03, threshold + 0.012, field) * up;
         if (puddle > 0.0) {
             m.albedo *= mix(1.0, 0.72, puddle);
             m.alpha = mix(m.alpha, 0.0016, puddle);

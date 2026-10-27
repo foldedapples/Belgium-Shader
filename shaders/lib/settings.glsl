@@ -103,17 +103,18 @@ const float shadowDistance = 160.0; // [96.0 128.0 160.0 192.0 224.0 256.0]
 
 /*---------------------------------------------------------------- Weather */
 #define RAIN_STREAKS // Realistic Rain
-#define RAIN_OPACITY 0.45 // [0.15 0.3 0.45 0.6 0.8 1.0]
+#define RAIN_OPACITY 0.3 // [0.15 0.3 0.45 0.6 0.8 1.0]
 #define RAIN_WIND_LEAN 1.0 // [0.0 0.5 1.0 1.5 2.0]
 #define WET_SURFACES // Wet Surfaces
 #define PUDDLES // Puddles
 #define PUDDLE_AMOUNT 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0]
+#define PUDDLE_SIZE 1.0 // [0.5 0.75 1.0 1.5 2.0]
 #define RAIN_RIPPLES // Rain Ripples
 #define LIGHTNING_FLASH // Lightning Flashes
 
 /*---------------------------------------------------------------- Moon and stars */
 #define MOON_TEXTURE 1 // [0 1 2]
-#define MOON_SIZE 2.0 // [1.0 1.5 2.0 2.5 3.0 4.0]
+#define MOON_SIZE 3.0 // [1.0 1.5 2.0 2.5 3.0 4.0]
 #define SUN_SIZE 1.5 // [1.0 1.5 2.0 2.5 3.0]
 #define STARS // Stars
 #define STAR_BRIGHTNESS 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0 3.0]
