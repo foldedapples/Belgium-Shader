@@ -244,7 +244,10 @@ void main() {
 
     // Reflection.
     float conf;
-    float roughA = water ? 0.0016 : 0.004;
+    // Distant water: the roughness its footprint-filtered normal lost (gbuffers/translucent.fsh)
+    // widens the lobe, so far glitter blurs into a glow instead of aliasing.
+    float waterExtraA = water ? tint.a * tint.a : 0.0;    // decodeWaterRoughness (lib/water/waves.glsl)
+    float roughA = water ? sqrt(sq(0.0016) + sq(waterExtraA)) : 0.004;
     vec3 refl = reflectionRadiance(viewPos0, viewN, roughA, fromBelow ? 0.0 : lm.y, noise, noise2, conf);
     if (fromBelow) {
         // Seen from below, the reflection is the underwater world (total internal reflection
@@ -258,7 +261,7 @@ void main() {
     if (maxOf(lightIllum) > 0.0 && !fromBelow) {
         ShadowResult sh = sampleShadow(playerPos0, n, lightDir, noise, 0.01);
         Material wm;
-        wm.albedo = vec3(0.0); wm.alpha = water ? 0.0025 : 0.003; wm.f0 = vec3(f0); wm.metal = false; wm.metalIndex = -2;
+        wm.albedo = vec3(0.0); wm.alpha = water ? sqrt(sq(0.0025) + sq(waterExtraA)) : 0.003; wm.f0 = vec3(f0); wm.metal = false; wm.metalIndex = -2;
         wm.porosity = 0.0; wm.sss = 0.0; wm.emission = 0.0; wm.ao = 1.0;
         LightSample ls = evalDirectional(wm, n, playerV, lightDir, lightAng);
         vec3 glint = ls.specular * lightIllum;

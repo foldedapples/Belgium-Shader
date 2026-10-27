@@ -28,14 +28,16 @@ void main() {
     vec3 n = normalize(vNormal);
     vec2 lm = normalizeLightmap(vLightmap);
     int id = vMaterial == DH_BLOCK_WATER ? MAT_WATER : MAT_GLASS;
+    float lostSlopeVar = 0.0;
     if (id == MAT_WATER && n.y > 0.5) {
         #ifdef WATER_WAVES
+        // Same per-frequency footprint prefilter as vanilla water (gbuffers/translucent.fsh).
+        float footprint = max(length(dFdx(vPlayerPos.xz)), length(dFdy(vPlayerPos.xz)));
         WaterParams wp = waterParamsAt(n, lm.y);
-        vec3 hg = waveHeightGrad((vPlayerPos + cameraPosition).xz, frameTimeCounter, wp);
-        vec2 g = hg.yz / (1.0 + length(vPlayerPos) * 0.004);
-        n = normalize(vec3(-g.x, 1.0, -g.y));
+        vec3 hg = waveHeightGradFiltered((vPlayerPos + cameraPosition).xz, frameTimeCounter, wp, footprint, lostSlopeVar);
+        n = normalize(vec3(-hg.y, 1.0, -hg.z));
         #endif
     }
     outSurface = vec4(octEncode(n), pack2x8(lm), pack2x8u(uint(id), uint(FLAG_LOD)));
-    outTint = vec4(vColor.rgb, id == MAT_WATER ? 1.0 : vColor.a);
+    outTint = vec4(vColor.rgb, id == MAT_WATER ? encodeWaterRoughness(waveLostAlpha(lostSlopeVar)) : vColor.a);
 }

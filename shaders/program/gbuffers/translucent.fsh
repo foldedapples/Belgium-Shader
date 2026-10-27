@@ -68,9 +68,13 @@ void main() {
     vec3 surfaceNormal = n;
 
     if (vId == MAT_WATER) {
+        // Pixel footprint on the water plane (blocks): the larger screen-space step of the
+        // camera-relative position, which grows at grazing angles as well as with distance.
+        float footprint = max(length(dFdx(vPlayerPos.xz)), length(dFdy(vPlayerPos.xz)));
+        float lostSlopeVar = 0.0;
         #ifdef WATER_WAVES
         WaterParams wp = waterParamsAt(n, lm.y);
-        vec3 hg = waveHeightGrad(worldPos.xz, frameTimeCounter, wp);
+        vec3 hg = waveHeightGradFiltered(worldPos.xz, frameTimeCounter, wp, footprint, lostSlopeVar);
         vec2 grad = hg.yz;
         #else
         vec2 grad = vec2(0.0);
@@ -79,18 +83,19 @@ void main() {
         if (state.simCenter.w > 0.5) {
             float planeW = 1.0 - saturate(abs(worldPos.y - state.simCenter.y) - 0.6);
             float w = planeW * simEdgeFade(worldPos.xz, state.simCenter.xz);
-            if (w > 0.0) grad += simGradient(worldPos.xz) * w;
+            // The simulation grid resolves wavenumbers up to pi / SIM_DX; filter at its typical one.
+            if (w > 0.0) grad += simGradient(worldPos.xz) * w * waveFilter(0.6 * PI / SIM_DX, footprint);
         }
         #endif
         #ifdef RAIN_RIPPLES
         float exposed = smoothstep(0.85, 0.97, lm.y);
         if (rainStrength * exposed > 0.01 && biomeWet > 0.0)
-            grad += rainRippleGradient(vPlayerPos.xz, frameTimeCounter) * rainStrength * exposed * biomeWet;
+            grad += rainRippleGradient(vPlayerPos.xz, frameTimeCounter) * rainStrength * exposed * biomeWet
+                  * waveFilter(26.0, footprint);   // ring wavenumber (lib/weather/ripples.glsl)
         #endif
         if (abs(n.y) > 0.5) {
-            // Height field over the horizontal plane; fade detail at grazing distance (anti-alias).
-            float dist = length(vPlayerPos);
-            grad *= 1.0 / (1.0 + dist * 0.004);
+            // Height field over the horizontal plane (already prefiltered per frequency above; the
+            // uniform 1 / (1 + 0.004 dist) fade it replaces flattened swells as much as ripples).
             surfaceNormal = normalize(vec3(-grad.x, 1.0, -grad.y)) * sign(n.y);
         } else {
             // Side faces of flowing water: perturb along the face tangent plane only.
@@ -98,11 +103,13 @@ void main() {
             vec3 b = cross(n, t);
             surfaceNormal = normalize(n - (t * grad.x + b * grad.y) * 0.5);
         }
+        // Alpha carries the roughness the footprint filter moved out of the normal (waves.glsl).
+        float lostA = encodeWaterRoughness(waveLostAlpha(lostSlopeVar));
         #ifdef WATER_VANILLA_TEXTURE
-        outTint = vec4(albedo.rgb, 1.0);
+        outTint = vec4(albedo.rgb, lostA);
         #else
         // Keep the biome water colour (vertex tint); the texture's own pattern is replaced by waves.
-        outTint = vec4(vColor.rgb, 1.0);
+        outTint = vec4(vColor.rgb, lostA);
         #endif
     } else {
         // Glass, ice, slime, portals: optional LabPBR normal map.

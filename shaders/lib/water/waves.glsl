@@ -51,34 +51,69 @@ void waveTrain(int i, WaterParams p, out vec2 dir, out float k, out float amp, o
     phase0 = fi * 2.399963;                   // golden angle decorrelates trains
 }
 
-// Height (blocks, ~zero mean) and gradient d(h)/d(xz) at a world position.
-vec3 waveHeightGrad(vec2 xz, float t, WaterParams p) {
+// Prefilter of a wave component of wavenumber k (rad/block) over the pixel footprint `f`
+// (blocks): a sinusoid averaged over a Gaussian with the second moment of a box pixel of width f
+// (sigma = f / sqrt(12)) keeps exp(-k^2 f^2 / 24) of its amplitude. Without it the short trains
+// (0.55-block wavelength) were evaluated far below the pixel size at range, so distant water
+// normals aliased and the sun glitter sparkled. (A wider sigma = f/2 over-blurred near water;
+// tools/tests/test_wave_filter.py compares both against the supersampled pixel average.)
+float waveFilter(float k, float footprint) { return exp(-sq(k * footprint) * (1.0 / 24.0)); }
+
+// Height (blocks, ~zero mean) and gradient d(h)/d(xz) at a world position, prefiltered over a
+// pixel footprint (0 = unfiltered). `lostSlopeVar` returns the slope variance the filter removed;
+// it belongs in the surface roughness (GGX alpha^2 ~ 2 x slope variance), so filtered water keeps
+// the right amount of glitter as a broad highlight instead of losing it or aliasing.
+vec3 waveHeightGradFiltered(vec2 xz, float t, WaterParams p, float footprint, out float lostSlopeVar) {
     float h = 0.0;
     vec2 g = vec2(0.0);
+    lostSlopeVar = 0.0;
     float t0 = t;
     t *= WAVE_SPEED;
     vec2 pos = xz - p.flow * t;
     for (int i = 0; i < WAVE_TRAINS; i++) {
         vec2 d; float k, a, ph;
         waveTrain(i, p, d, k, a, ph);
+        float wf = waveFilter(k, footprint);
+        lostSlopeVar += 0.5 * sq(a * k) * (1.0 - wf * wf);
+        if (wf < 0.01) continue;
         float x = k * dot(d, pos) - waveOmega(k) * t0 + ph;
         // Trochoid-like crest sharpening: sin plus a small second harmonic (keeps slopes bounded).
         float s = sin(x), c = cos(x);
         float sharp = 0.25 * min(k * a * 6.0, 1.0);
-        h += a * (s + sharp * (0.5 - 0.5 * cos(2.0 * x)));
+        h += wf * a * (s + sharp * (0.5 - 0.5 * cos(2.0 * x)));
         float dh = a * k * (c + sharp * sin(2.0 * x));
-        g += dh * d;
+        g += wf * dh * d;
     }
     // Advected chop: two octaves of gradient noise drifting with the wind, for small detail that
-    // never repeats.
+    // never repeats (base frequencies ~0.9 and ~2.1 cycles per block).
     vec2 q = pos * 0.9 + p.wind * t * 0.6;
-    vec3 n1 = gradientNoiseD(q);
-    vec3 n2 = gradientNoiseD(q * 2.3 + vec2(17.0, -9.0) - p.wind * t * 0.4);
     float detail = (0.022 + 0.03 * p.chop + 0.03 * p.storm) * (1.0 - 0.5 * p.calm);
-    h += detail * (n1.x + 0.45 * n2.x);
-    g += detail * (n1.yz * 0.9 + 0.45 * n2.yz * 2.07);
+    float w1 = waveFilter(TAU * 0.9, footprint), w2 = waveFilter(TAU * 2.07, footprint);
+    lostSlopeVar += 0.5 * sq(detail * 0.9) * (1.0 - w1 * w1) + 0.5 * sq(detail * 0.93) * (1.0 - w2 * w2);
+    if (w1 > 0.01) {
+        vec3 n1 = gradientNoiseD(q);
+        h += w1 * detail * n1.x;
+        g += w1 * detail * n1.yz * 0.9;
+    }
+    if (w2 > 0.01) {
+        vec3 n2 = gradientNoiseD(q * 2.3 + vec2(17.0, -9.0) - p.wind * t * 0.4);
+        h += w2 * detail * 0.45 * n2.x;
+        g += w2 * detail * 0.45 * n2.yz * 2.07;
+    }
+    lostSlopeVar *= WAVE_HEIGHT * WAVE_HEIGHT;
     return vec3(h * WAVE_HEIGHT, g * WAVE_HEIGHT);
 }
+
+vec3 waveHeightGrad(vec2 xz, float t, WaterParams p) {
+    float unused;
+    return waveHeightGradFiltered(xz, t, p, 0.0, unused);
+}
+
+// Extra GGX alpha for the slope variance a footprint filter removed, and its 8-bit encoding in
+// the water's colortex5 alpha (sqrt for precision near 0; glass uses that channel for opacity).
+float waveLostAlpha(float lostSlopeVar) { return saturate(sqrt(2.0 * lostSlopeVar)); }
+float encodeWaterRoughness(float a) { return sqrt(saturate(a)); }
+float decodeWaterRoughness(float e) { return e * e; }
 
 // Low-frequency part only, for vertex displacement (cheap, no aliasing at one vertex per block).
 float waveSwellHeight(vec2 xz, float t, WaterParams p) {
