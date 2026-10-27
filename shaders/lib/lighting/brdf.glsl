@@ -44,8 +44,13 @@ struct LightSample {
     vec3 specular;
 };
 
-// Response to a directional light of unit irradiance arriving from `l`.
-LightSample evalDirectional(Material m, vec3 n, vec3 v, vec3 l) {
+// Response to a light of unit irradiance arriving from `l` that subtends `angularRadius` (radians).
+// The sun and moon are disks, not points: their mirror image on a smooth surface is as wide as the
+// disk. Combining the source's spread with the microfacet spread in quadrature (half the angular
+// radius, as half-vectors turn half as far as reflected rays) keeps D normalised, gives polished
+// and wet surfaces a highlight of the right size and removes the sub-pixel peaks of a point light
+// at alpha = 0.0016 (D ~ 1e5), which sparkled from frame to frame.
+LightSample evalDirectional(Material m, vec3 n, vec3 v, vec3 l, float angularRadius) {
     LightSample s;
     float NoL = dot(n, l);
     float NoV = max(dot(n, v), 1e-4);
@@ -54,7 +59,8 @@ LightSample evalDirectional(Material m, vec3 n, vec3 v, vec3 l) {
     float NoH = saturate(dot(n, h));
     float VoH = saturate(dot(v, h));
     vec3 F = materialFresnel(m, VoH);
-    float D = D_GGX(NoH, m.alpha);
+    float aL = sqrt(m.alpha * m.alpha + sq(0.5 * angularRadius));
+    float D = D_GGX(NoH, aL);
     float V = V_SmithCorrelated(NoV, NoL, m.alpha);
     s.specular = F * (D * V * NoL) * multiScatterCompensation(m.f0, NoV, m.alpha);
     // Diffuse keeps the energy the specular lobe does not reflect (both directions).

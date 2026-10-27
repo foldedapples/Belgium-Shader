@@ -94,7 +94,7 @@ void main() {
     vec3 viewPos = screenToView(uv, 1.0, gbufferProjectionInverse);
     vec3 dir = normalize(mat3(gbufferModelViewInverse) * viewPos);
     float maxDist = 1e9;
-    if (depth < 1.0) maxDist = length(screenToView(uv, depth, gbufferProjectionInverse));
+    if (depth < 1.0) maxDist = length(sceneToView(uv, depth));
 
     float camAlt = cameraPosition.y - 62.0;
     vec3 ro = vec3(0.0, PLANET_RADIUS + camAlt, 0.0);

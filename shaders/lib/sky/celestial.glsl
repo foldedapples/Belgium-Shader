@@ -31,6 +31,23 @@ const float EARTH_PENUMBRA_RADIUS = 0.0218;
 
 vec3 sunDirection() { return celestialDirection(sunPosition); }
 
+#ifdef MERIDIAN_STATE
+// Local adaptation for the solar disk and its mirror images. At a daylight exposure the real
+// disk is ~3e4 x display white; tone mapping clips it either way, but bloom and TAA see the raw
+// value. Left unbounded, the disk saturated every bloom level into a flat glare disc tens of
+// degrees wide, and wet or polished surfaces reflected sub-pixel glints just as bright, which
+// flickered under TAA. The disk is limited to SUN_DISK_PEAK x display white at the current
+// exposure (still far above white, so it reads as blinding and glows), and no reflected
+// highlight may exceed the limited disk.
+const float SUN_DISK_PEAK = 120.0;
+float sunRadianceLimit() { return SUN_DISK_PEAK / max(state.exposure, 1e-6); }
+vec3 limitHighlight(vec3 radiance) {
+    float l = luminance(radiance);
+    float lim = sunRadianceLimit();
+    return l > lim ? radiance * (lim / l) : radiance;
+}
+#endif
+
 // Axis of the daily rotation of the sky in player space. With Iris's celestial matrix
 // (rotate Y -90, rotate Z sunPathRotation, rotate X skyAngle) the sun moves on a great circle about
 // (0, +-sin r, cos r). The sign convention of r is not documented, so begin.csh measures it from

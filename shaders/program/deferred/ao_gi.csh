@@ -48,7 +48,7 @@ float horizonAO(vec2 uv, vec3 viewPos, vec3 viewN, float noise) {
                 vec2 suv = uv + dirUv * t * (side == 0 ? 1.0 : -1.0);
                 if (any(lessThan(suv, vec2(0.0))) || any(greaterThan(suv, vec2(1.0)))) continue;
                 float d = texture(depthtex1, suv).r;
-                vec3 sp = screenToView(suv, d, gbufferProjectionInverse);
+                vec3 sp = sceneToView(suv, d);
                 vec3 delta = sp - viewPos;
                 float len = length(delta);
                 float c = dot(delta / max(len, 1e-4), v);
@@ -115,7 +115,7 @@ void main() {
     vec2 uv = (vec2(px) + 0.5) / vec2(size);
     float depth = texture(depthtex1, uv).r;
     if (depth >= 1.0) { imageStore(aoGiImg, px, vec4(0, 0, 0, 1)); return; }
-    vec3 viewPos = screenToView(uv, depth, gbufferProjectionInverse);
+    vec3 viewPos = sceneToView(uv, depth);
     vec4 g2 = texture(colortex2, uv);
     vec3 n = octDecode(unpack2x8(g2.z));
     vec3 viewN = mat3(gbufferModelView) * n;

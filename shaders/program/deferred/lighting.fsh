@@ -194,7 +194,11 @@ void main() {
         // Light that only reaches faces open to the sky (vanilla sky light 0 means enclosed).
         sh.light *= smoothstep(0.0, 0.2, gb.lightmap.y + (sd.lod ? 1.0 : 0.0)) * 0.98 + 0.02 * float(hand);
         shadowLight = sh.light;
-        LightSample ls = evalDirectional(m, n, v, lightDir);
+        LightSample ls = evalDirectional(m, n, v, lightDir, sunAng);
+        #ifdef WORLD_OVERWORLD
+        // A mirror image of the sun or moon is never brighter than the (adapted) disk itself.
+        ls.specular = limitHighlight(ls.specular * lightIllum) / max(lightIllum, vec3(1e-9));
+        #endif
         vec3 direct = (ls.diffuse * m.albedo + ls.specular) * sh.light;
         #ifdef SUBSURFACE_SCATTERING
         if (m.sss > 0.0) {

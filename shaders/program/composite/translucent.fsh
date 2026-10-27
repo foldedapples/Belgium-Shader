@@ -73,7 +73,9 @@ vec3 fallbackSky(vec3 dirPlayer, float skyLight, float roughA) {
     #ifdef SKY_REFLECTIONS
     #ifdef WORLD_OVERWORLD
     SkyLights L = skyLights();
-    vec3 s = roughA < 0.08 ? skyRadiance(dirPlayer, L, pixelAngularSize(), true) : skyRadiance(dirPlayer, L, 0.01, false);
+    // The shadow-casting body is added analytically by the BRDF glint; only the other one is drawn.
+    vec3 s = roughA < 0.08 ? skyRadianceDisks(dirPlayer, L, pixelAngularSize(), false, L.sunIsLight)
+                           : skyRadiance(dirPlayer, L, 0.01, false);
     // Very rough surfaces see the cosine-weighted sky.
     s = mix(s, skyIrradiance(dirPlayer) * PI, saturate(roughA * 1.5));
     #elif defined WORLD_END
@@ -137,7 +139,7 @@ void main() {
             vec4 g2 = texelFetch(colortex2, px, 0);
             vec3 n = octDecode(g2.xy);
             vec2 lm = unpack2x8(g2.w);
-            vec3 viewPos = screenToView(uv, d1, gbufferProjectionInverse);
+            vec3 viewPos = sceneToView(uv, d1);
             vec3 viewN = normalize(mat3(gbufferModelView) * n);
             float conf;
             vec3 refl = reflectionRadiance(viewPos, viewN, sw.a, lm.y, noise, noise2, conf);
@@ -174,7 +176,7 @@ void main() {
     if (!tir) {
         float strength = water ? min(pathLen, 6.0) * 0.6 : 0.15;
         vec3 target = viewPos0 + refrDir * max(strength, 0.05);
-        vec2 ruv = viewToScreen(target, gbufferProjection).xy;
+        vec2 ruv = viewToScene(target).xy;
         ruv = clamp(ruv, vec2(0.001), vec2(0.999));
         // The opaque surface seen through the refracted ray, across vanilla and LOD depth. LOD
         // water has no vanilla depth behind it; reading only depthtex1 there treated the bottom
@@ -196,12 +198,15 @@ void main() {
     SkyLights L = skyLights();
     vec3 lightDir = L.lightDir;
     vec3 lightIllum = (L.sunIsLight ? vec3(L.sunIllum) : L.moonIllum) * transmittanceToTop(cameraRadius(cameraPosition.y), lightDir.y);
+    float lightAng = L.sunIsLight ? SUN_ANGULAR_RADIUS : MOON_ANGULAR_RADIUS;
     #elif defined WORLD_END
     vec3 lightDir = END_LIGHT_DIR;
     vec3 lightIllum = endLightIlluminance();
+    float lightAng = 0.02;
     #else
     vec3 lightDir = vec3(0.0, 1.0, 0.0);
     vec3 lightIllum = vec3(0.0);
+    float lightAng = 0.0;
     #endif
     vec3 playerPos0 = viewToPlayer(viewPos0);
 
@@ -255,8 +260,12 @@ void main() {
         Material wm;
         wm.albedo = vec3(0.0); wm.alpha = water ? 0.0025 : 0.003; wm.f0 = vec3(f0); wm.metal = false; wm.metalIndex = -2;
         wm.porosity = 0.0; wm.sss = 0.0; wm.emission = 0.0; wm.ao = 1.0;
-        LightSample ls = evalDirectional(wm, n, playerV, lightDir);
-        color += ls.specular * lightIllum * sh.light * smoothstep(0.0, 0.3, lm.y + 0.2);
+        LightSample ls = evalDirectional(wm, n, playerV, lightDir, lightAng);
+        vec3 glint = ls.specular * lightIllum;
+        #ifdef WORLD_OVERWORLD
+        glint = limitHighlight(glint);
+        #endif
+        color += glint * sh.light * smoothstep(0.0, 0.3, lm.y + 0.2);
     }
 
     #if DEBUG_VIEW == 16

@@ -18,7 +18,12 @@ vec3 sunDiskRadiance(vec3 dir, vec3 sunDir, float illum, float pixelAngle) {
     float mu = sqrt(max(1.0 - rho * rho, 0.0));
     const vec3 u = vec3(0.48, 0.60, 0.72);
     vec3 limb = (1.0 - u * (1.0 - mu)) / (1.0 - u / 3.0);
-    return vec3(illum / (PI * SUN_ANGULAR_RADIUS * SUN_ANGULAR_RADIUS)) * limb * cover;
+    float peak = illum / (PI * SUN_ANGULAR_RADIUS * SUN_ANGULAR_RADIUS);
+    #ifdef MERIDIAN_STATE
+    // Limb darkening keeps its shape; only the overall level is adapted (celestial.glsl).
+    peak = min(peak, sunRadianceLimit() / 1.32);
+    #endif
+    return vec3(peak) * limb * cover;
 }
 
 // Natural night-sky background (airglow plus zodiacal light): about 22 mag/arcsec^2 at the
@@ -51,8 +56,10 @@ vec3 nightSkyRadiance(vec3 dir, float pixelAngle, float gain) {
     return c;
 }
 
-// `withDisks` adds the sun and moon disks (off for reflections of rough surfaces).
-vec3 skyRadiance(vec3 dir, SkyLights L, float pixelAngle, bool withDisks) {
+// `withSun` / `withMoon` add the disks. Reflections leave out whichever body is the shadow-casting
+// light: the BRDF already adds that one as an analytic, area-correct glint, and adding the disk
+// too counted it twice (and as an aliased sub-pixel spot).
+vec3 skyRadianceDisks(vec3 dir, SkyLights L, float pixelAngle, bool withSun, bool withMoon) {
     float r = cameraRadius(cameraPosition.y);
     vec3 scatter = sampleSkyView(dir);
     // The LUT is a clear sky. Under rain the visible air below the overcast is lit by grey cloud
@@ -64,18 +71,23 @@ vec3 skyRadiance(vec3 dir, SkyLights L, float pixelAngle, bool withDisks) {
     #endif
     vec3 trans = transmittanceToTop(r, dir.y);
     vec3 space = nightSkyRadiance(dir, pixelAngle, L.skyGain);
-    if (withDisks) {
+    if (withSun || withMoon) {
+        // The Moon's coverage is needed for eclipses even when only the sun is drawn.
         float cov;
         vec3 moon = moonDiskRadiance(dir, L.moonDir, L.sunDir, celestialAxis(), L.moonFullIllum, pixelAngle, cov);
-        space = mix(space, moon, cov);
+        if (withMoon) space = mix(space, moon, cov);
         // The new Moon occludes the sun in an eclipse; draw the sun first, the Moon over it.
-        vec3 sun = sunDiskRadiance(dir, L.sunDir, SUN_ILLUMINANCE, pixelAngle);
-        space += sun * (1.0 - cov);
+        if (withSun) space += sunDiskRadiance(dir, L.sunDir, SUN_ILLUMINANCE, pixelAngle) * (1.0 - cov);
     }
     // Airglow emits at ~90 km, in front of the Moon and stars but behind most of the air.
     space += airglow(dir, SUN_ILLUMINANCE * MOON_PHYSICAL_RATIO * L.skyGain);
     // Below the horizon the planet blocks space (transmittance is 0 there).
     return scatter + space * trans;
+}
+
+// `withDisks` adds the sun and moon disks (off for reflections of rough surfaces).
+vec3 skyRadiance(vec3 dir, SkyLights L, float pixelAngle, bool withDisks) {
+    return skyRadianceDisks(dir, L, pixelAngle, withDisks, withDisks);
 }
 
 #endif

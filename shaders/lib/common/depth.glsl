@@ -29,7 +29,7 @@ SceneDepth resolveDepth(vec2 uv, bool opaqueOnly, bool hand) {
     s.lod = false;
     s.sky = false;
     if (s.depth < 1.0) {
-        s.viewPos = hand ? screenToViewHand(uv, s.depth) : screenToView(uv, s.depth, gbufferProjectionInverse);
+        s.viewPos = hand ? screenToViewHand(uv, s.depth) : sceneToView(uv, s.depth);
         return s;
     }
     #ifdef DISTANT_HORIZONS
@@ -37,7 +37,7 @@ SceneDepth resolveDepth(vec2 uv, bool opaqueOnly, bool hand) {
     if (dd < 1.0) {
         s.depth = dd;
         s.lod = true;
-        s.viewPos = screenToView(uv, dd, dhProjectionInverse);
+        s.viewPos = screenToView(uv - jitterUv(), dd, dhProjectionInverse);   // DH is jittered too
         return s;
     }
     #endif
@@ -46,7 +46,7 @@ SceneDepth resolveDepth(vec2 uv, bool opaqueOnly, bool hand) {
     if (vd < 1.0) {
         s.depth = vd;
         s.lod = true;
-        s.viewPos = screenToView(uv, vd, vxProjInv);
+        s.viewPos = screenToView(uv, vd, vxProjInv);   // Voxy draws without the TAA jitter
         return s;
     }
     #endif

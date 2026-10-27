@@ -73,7 +73,7 @@ void main() {
     if (any(greaterThanEqual(px, size))) return;
     vec2 uv = (vec2(px) + 0.5) / vec2(size);
     float depth = texture(depthtex0, uv).r;
-    vec3 viewPos = screenToView(uv, depth, gbufferProjectionInverse);
+    vec3 viewPos = sceneToView(uv, depth);
     vec3 dirView = normalize(viewPos);
     vec3 dir = mat3(gbufferModelViewInverse) * dirView;
     float dist = depth < 1.0 ? length(viewPos) : far * 1.5;

@@ -63,10 +63,13 @@ vec3 applySceneGrade(vec3 c, Grade g) {
 }
 
 vec3 applyDisplayGrade(vec3 c, Grade g) {
-    // Contrast around display mid grey in a perceptual (sqrt) domain.
-    vec3 p = sqrt(max(c, 0.0));
-    p = (p - 0.45) * g.contrast + 0.45;
-    c = max(p * p, 0.0);
+    // Contrast around display mid grey in a perceptual (sqrt) domain, weighted by 4p(1-p) so black
+    // and white stay where they are. The plain (p - 0.45) * k + 0.45 it replaces is not anchored
+    // at black: at Vibrant's 1.06 every display value below 0.00065 became pure black (Cinematic:
+    // below 0.0026), which crushed moonlit and cave shadows. Monotonic for contrast 0.7 .. 1.4.
+    vec3 p = sqrt(saturate(c));
+    p += (g.contrast - 1.0) * (p - 0.45) * (4.0 * p * (1.0 - p));
+    c = p * p;
     // Vibrance: boost scaled by how unsaturated the colour is.
     float mx = maxOf(c), mn = minOf(c);
     float sat = mx > 1e-4 ? (mx - mn) / mx : 0.0;

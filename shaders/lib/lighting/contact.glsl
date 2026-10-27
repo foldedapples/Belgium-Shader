@@ -13,11 +13,11 @@ float contactShadow(vec3 viewPos, vec3 viewLight, float noise) {
     vec3 p = viewPos + stepV * noise;
     for (int i = 0; i < STEPS; i++) {
         p += stepV;
-        vec3 s = viewToScreen(p, gbufferProjection);
+        vec3 s = viewToScene(p);
         if (any(lessThan(s.xy, vec2(0.0))) || any(greaterThan(s.xy, vec2(1.0)))) break;
         float d = texture(depthtex1, s.xy).r;
         if (d >= 1.0) continue;
-        float sceneZ = screenToView(s.xy, d, gbufferProjectionInverse).z;
+        float sceneZ = sceneToView(s.xy, d).z;
         float behind = sceneZ - p.z;                  // > 0: the ray is behind the depth buffer
         if (behind > 0.01 && behind < 0.25 + 0.01 * -p.z) {
             // Fade with distance along the ray so the shadow softens away from the contact.

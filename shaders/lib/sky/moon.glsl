@@ -96,9 +96,11 @@ vec3 moonDiskRadiance(vec3 dir, vec3 moonDir, vec3 sunDir, vec3 axis, vec3 fullI
     // Local adaptation for the disk only: at a moonlit-landscape exposure the real Moon is ~1000x
     // over-exposed (as in photographs), yet the eye sees its maria and craters because the retina
     // adapts locally. The disk's radiance is therefore limited so its brightest part lands about
-    // 2.5x above display white at the current exposure; moonlight on the world stays physical.
-    float peak = luminance(fullIllum) / (PI * sq(MOON_ANGULAR_RADIUS)) * 1.3;
-    rad *= min(1.0, 2.5 / max(peak * state.exposure, 1e-6));
+    // 1.6x display white at the current exposure; moonlight on the world stays physical. (At 2.5x,
+    // with the true peak of the shading - bright highlands, opposition surge - about 1.3x higher
+    // than assumed here, the highlands clipped to featureless white and the disk bloomed.)
+    float peak = luminance(fullIllum) / (PI * sq(MOON_ANGULAR_RADIUS)) * 1.7;
+    rad *= min(1.0, 1.6 / max(peak * state.exposure, 1e-6));
     #endif
     return rad * coverage;
 }

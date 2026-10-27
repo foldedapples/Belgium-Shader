@@ -33,9 +33,23 @@ void main() {
     state.lightBasis[1] = vec4(Lt[1], 0.0);
     state.lightBasis[2] = vec4(Lt[2], 0.0);
 
-    // Camera position in light space, in double precision: L * (cameraInt + cameraFract).
+    // The texel grid is anchored at a world block near the player rather than at the world origin.
+    // Any change of L (the sun moving every frame, or float noise in sunPosition, which Iris gives
+    // in view space and so changes when the head turns) shifts the grid relative to nearby
+    // geometry by |dL| times the distance to the pivot. Pivoting at the world origin made that
+    // distance thousands of blocks: shadow edges got a new sub-texel phase every frame (shimmer)
+    // and twitched with head movement. With a pivot within SHADOW_ANCHOR_RANGE blocks the shift is
+    // ~1e-3 block per frame; re-anchoring (a single sub-texel step) happens once per 32 blocks.
+    ivec3 camBlockNow = cameraPositionInt + ivec3(floor(cameraPositionFract));
+    ivec4 anchor = state.shadowAnchor;
+    if (anchor.w == 0 || any(greaterThan(abs(camBlockNow - anchor.xyz), ivec3(SHADOW_ANCHOR_RANGE)))) {
+        anchor = ivec4(camBlockNow, 1);
+        state.shadowAnchor = anchor;
+    }
+
+    // Camera position relative to the anchor in light space, in double precision.
     dmat3 Ld = dmat3(L);
-    dvec3 cam = dvec3(cameraPositionInt) + dvec3(cameraPositionFract);
+    dvec3 cam = dvec3(cameraPositionInt - anchor.xyz) + dvec3(cameraPositionFract);
     dvec3 c = Ld * cam;
     for (int k = 0; k < 4; k++) {
         double t = double(cascadeTexel(k));

@@ -12,8 +12,14 @@
 //
 // The snapped offsets are computed once per frame in double precision by begin.csh and stored
 // in the state SSBO (cascadeCenter[k].xy), so every pass uses identical values.
+//
+// Snapping is done relative to a world anchor near the player (state.shadowAnchor), not the
+// world origin, so that rotation of the light only moves the grid by |dL| * (distance to the
+// anchor) instead of |dL| * (distance to 0,0,0).
 
 const float shadowIntervalSize = 0.0;
+// Light rotation pivots about a world block within this many blocks of the camera (begin.csh).
+const int SHADOW_ANCHOR_RANGE = 32;
 const bool  shadowHardwareFiltering = true;
 const float SHADOW_Z_RANGE = 384.0;
 // Receivers use cascade k inside CASCADE_SELECT of its square; the geometry stage leaves a
