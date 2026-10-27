@@ -251,7 +251,7 @@ void main() {
     // ---------------------------------------------------------------- environment specular weight
     float NoV = saturate(dot(n, v));
     vec3 specWeight = m.metal && m.metalIndex >= 0
-        ? fresnelConductor(NoV, METAL_N[m.metalIndex], METAL_K[m.metalIndex]) * mix(1.0, dfgTerm(NoV, m.alpha).x + dfgTerm(NoV, m.alpha).y, saturate(m.alpha * 2.0))
+        ? fresnelConductor(NoV, METAL_N[m.metalIndex], METAL_K[m.metalIndex]) * m.albedo * mix(1.0, dfgTerm(NoV, m.alpha).x + dfgTerm(NoV, m.alpha).y, saturate(m.alpha * 2.0))
         : specularAlbedo(m.f0, NoV, m.alpha);
     specWeight *= multiScatterCompensation(m.f0, NoV, m.alpha);
     // Specular occlusion from AO (Lagarde & de Rousiers 2014).

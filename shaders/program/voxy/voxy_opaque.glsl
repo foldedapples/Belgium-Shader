@@ -47,8 +47,9 @@ void voxy_emitFragment(VoxyFragmentParameters p) {
     vec4 spec = vec4(0.1, 10.0 / 255.0, 8.0 / 255.0, 1.0);
     if (id == 10u || (id >= 11u && id <= 19u)) spec = vec4(0.35, 10.0 / 255.0, (65.0 + 150.0) / 255.0, 1.0);
     if (id == 30u || id == 44u || id == 45u || id == 50u || (id >= 51u && id <= 53u)) spec.a = 0.8;
-    if (id == 90u) spec = vec4(0.7, 230.0 / 255.0, 0.0, 1.0);
-    if (id == 91u) spec = vec4(0.8, 231.0 / 255.0, 0.0, 1.0);
+    // Metals: 255 = albedo as F0 (matches lib/material/fallback.glsl; 230-237 would tint twice).
+    if (id == 90u) spec = vec4(0.7, 1.0, 0.0, 1.0);
+    if (id == 91u) spec = vec4(0.8, 1.0, 0.0, 1.0);
     uint flags = 16u | 4u;   // FLAG_LOD | FLAG_NO_PUDDLE
     outAlbedo = vec4(albedo.rgb, 1.0);
     outNormal = vec4(mrd_octEncode(n), mrd_pack2x8(mrd_octEncode(n)), mrd_pack2x8(lm));

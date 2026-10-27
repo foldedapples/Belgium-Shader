@@ -169,6 +169,22 @@ def run(glslang, variant, label, macros, defines, undefs, jobs):
     return len(failed)
 
 
+def check_voxy_copies():
+    """Voxy cannot #include, so each dimension holds a copy of program/voxy/*; they must match."""
+    src = os.path.join(SHADERS, "program", "voxy")
+    stale = []
+    for name in sorted(os.listdir(src)):
+        with open(os.path.join(src, name), "rb") as f:
+            ref = f.read()
+        for dim in DIMENSIONS:
+            p = os.path.join(SHADERS, dim, name)
+            if not os.path.isfile(p) or open(p, "rb").read() != ref:
+                stale.append(f"{dim}/{name}")
+    for s in stale:
+        print(f"FAIL stale Voxy copy {s} (copy it from program/voxy/)")
+    return len(stale)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variants", nargs="+", default=["base"], choices=list(VARIANTS))
@@ -186,7 +202,7 @@ def main():
         for name, (d, u) in parse_profiles().items():
             configs.append((name, dict(d, **defines), u + args.undef))
 
-    failures = 0
+    failures = check_voxy_copies()
     for variant in args.variants:
         for cname, d, u in configs:
             failures += run(glslang, variant, f"{variant}/{cname}", VARIANTS[variant], d, u, args.jobs)

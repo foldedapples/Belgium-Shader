@@ -76,7 +76,9 @@ Material decodeMaterial(vec3 albedoLinear, vec4 spec, float materialAO) {
     if (g >= 230) {
         m.metal = true;
         m.metalIndex = g <= 237 ? g - 230 : -1;
-        m.f0 = m.metalIndex >= 0 ? conductorF0(METAL_N[m.metalIndex], METAL_K[m.metalIndex]) : albedoLinear;
+        // LabPBR: for the predefined metals "the albedo is used to tint the reflections instead of
+        // being used for diffuse shading"; for 255 (and the undefined 238-254) albedo is the F0.
+        m.f0 = m.metalIndex >= 0 ? conductorF0(METAL_N[m.metalIndex], METAL_K[m.metalIndex]) * albedoLinear : albedoLinear;
     } else {
         m.metal = false;
         m.metalIndex = -2;
@@ -99,9 +101,9 @@ Material decodeMaterial(vec3 albedoLinear, vec4 spec, float materialAO) {
 vec3 materialFresnel(Material m, float cosTheta) {
     cosTheta = saturate(cosTheta);
     if (m.metal && m.metalIndex >= 0) {
-        // Exact conductor Fresnel, tinted by albedo the way LabPBR intends for predefined metals.
-        vec3 f = fresnelConductor(cosTheta, METAL_N[m.metalIndex], METAL_K[m.metalIndex]);
-        return f;
+        // Exact conductor Fresnel, tinted by albedo as LabPBR specifies for predefined metals (the
+        // tint used to be described here but not applied).
+        return fresnelConductor(cosTheta, METAL_N[m.metalIndex], METAL_K[m.metalIndex]) * m.albedo;
     }
     return m.f0 + (1.0 - m.f0) * pow5(1.0 - cosTheta);
 }

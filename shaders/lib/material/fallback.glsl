@@ -19,14 +19,17 @@ vec4 fallbackSpecular(int id, vec3 albedo, float lightLevel) {
     float emission = 0.0;  // 0..1
     float lum = luminance(albedo);
 
-    if (id == MAT_IRON || id == MAT_IRON_THIN) { f0 = 230.0; smooth_ = 0.62 + 0.25 * lum; }
-    else if (id == MAT_GOLD)                  { f0 = 231.0; smooth_ = 0.78 + 0.15 * lum; }
+    // Metals use 255 (albedo is the F0), not the predefined metals 230-237: LabPBR tints those
+    // by the albedo, which suits textures authored for it but would tint vanilla gold and copper
+    // twice (their conductor colour times an already coloured texture) and halve vanilla iron.
+    if (id == MAT_IRON || id == MAT_IRON_THIN) { f0 = 255.0; smooth_ = 0.62 + 0.25 * lum; }
+    else if (id == MAT_GOLD)                  { f0 = 255.0; smooth_ = 0.78 + 0.15 * lum; }
     else if (id >= MAT_COPPER && id <= MAT_COPPER_OXIDIZED) {
         // Bare copper is a conductor; verdigris (green-blue patina) is a rough dielectric.
         float bare = saturate((albedo.r - albedo.g) * 5.0 + 0.2);
         float age = float(id - MAT_COPPER) / 3.0;
         bare *= 1.0 - age * 0.85;
-        f0 = bare > 0.5 ? 234.0 : 12.0;
+        f0 = bare > 0.5 ? 255.0 : 12.0;
         smooth_ = mix(0.25, 0.72, bare);
         b = bare > 0.5 ? 0.0 : 10.0;
     }
