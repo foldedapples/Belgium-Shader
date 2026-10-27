@@ -111,6 +111,67 @@ vec3 rainbowLight(vec3 dir, vec3 sunDir, out float skyScale) {
     #endif
 }
 
+// ---- aurora
+// Emission curtains in the upper atmosphere: sheets folded along slowly drifting wavy lines, with
+// fine vertical rays (striations along the magnetic field). The view ray is intersected with
+// AURORA_SHELLS altitude shells between 100 and 280 km, so curtains converge towards the horizon
+// and never shift as the player moves. Colour comes from altitude: atomic-oxygen green
+// (557.7 nm) peaks near 110 km, the fainter red line (630 nm) dominates above ~200 km. Brightness
+// is tied to the night-sky illuminance `k` (full-Moon units with the night lift), so it sits
+// above airglow and the Milky Way without flooding the exposure. "Some nights" picks about one
+// night in four from a hash of the day, fading in and out over the night.
+const int AURORA_SHELLS = 8;
+
+float auroraCurtain(vec2 p, float t) {
+    // Two folded sheets, each a narrow band around a wavy line.
+    float a = 0.0;
+    for (int s = 0; s < 2; s++) {
+        float fs = float(s);
+        float line = 0.9 * sin(p.x * 0.55 + t * 0.03 + fs * 2.1) + 0.45 * sin(p.x * 1.37 - t * 0.05 + fs)
+                   + (valueNoise(vec2(p.x * 0.8 + t * 0.02, fs * 7.0)) - 0.5) * 1.2 + fs * 2.4 - 1.2;
+        float d = p.y - line;
+        // Sharp lower edge, softer upper: curtains are brightest at their base.
+        float band = exp(-sq(d) * (d > 0.0 ? 9.0 : 30.0));
+        float rays = 0.45 + 0.55 * valueNoise(vec2(p.x * 9.0 + t * 0.15, fs * 3.0 + t * 0.02));
+        a += band * rays;
+    }
+    return a;
+}
+
+vec3 auroraRadiance(vec3 dir, vec3 sunDir, float k) {
+    #if AURORA > 0
+    if (dir.y <= 0.0) return vec3(0.0);
+    float dark = smoothstep(-0.10, -0.22, sunDir.y);
+    #if AURORA == 1
+    float day = float(worldDay) + float(worldTime) / 24000.0 + 0.5;    // the night spans two days
+    float tonight = step(0.75, hash1(float(int(floor(day)))));
+    float phase = fract(day);                                            // 0.25 .. 0.75 is night
+    float activity = tonight * smoothstep(0.30, 0.42, phase) * (1.0 - smoothstep(0.62, 0.72, phase));
+    #else
+    float activity = 1.0;
+    #endif
+    float vis = dark * activity * (1.0 - rainStrength);
+    if (vis <= 0.001) return vec3(0.0);
+    float t = frameTimeCounter + float(worldTime) * 0.05;
+    vec3 col = vec3(0.0);
+    for (int i = 0; i < AURORA_SHELLS; i++) {
+        float h = 100.0 + float(i) * (180.0 / float(AURORA_SHELLS - 1));   // km
+        float dist = h / max(dir.y, 0.03);                                     // flat-shell approximation
+        vec2 p = dir.xz * dist * 0.006;                                        // curtain coordinates
+        float c = auroraCurtain(p, t);
+        vec3 green = vec3(0.12, 1.0, 0.35) * exp(-max(h - 110.0, 0.0) / 45.0);
+        vec3 red = vec3(1.0, 0.12, 0.25) * 0.35 * smoothstep(170.0, 240.0, h);
+        col += c * (green + red);
+    }
+    // Longer path through the emitting layer near the horizon, faded at the very bottom.
+    float path = min(1.0 / max(dir.y, 0.05), 6.0) * smoothstep(0.0, 0.06, dir.y);
+    // Peak curtain radiance ~0.2 k: about twice moonlit ground, well below the Moon.
+    return col * (path / float(AURORA_SHELLS)) * vis * k * 0.5 * AURORA_BRIGHTNESS;
+    #else
+    return vec3(0.0);
+    #endif
+}
+
 // `withSun` / `withMoon` add the disks. Reflections leave out whichever body is the shadow-casting
 // light: the BRDF already adds that one as an analytic, area-correct glint, and adding the disk
 // too counted it twice (and as an aliased sub-pixel spot).
@@ -140,6 +201,8 @@ vec3 skyRadianceDisks(vec3 dir, SkyLights L, float pixelAngle, bool withSun, boo
     }
     // Airglow emits at ~90 km, in front of the Moon and stars but behind most of the air.
     space += airglow(dir, SUN_ILLUMINANCE * MOON_PHYSICAL_RATIO * L.skyGain);
+    // The aurora emits at 100-280 km, above most of the air, like airglow.
+    space += auroraRadiance(dir, L.sunDir, SUN_ILLUMINANCE * MOON_PHYSICAL_RATIO * L.skyGain);
     // Below the horizon the planet blocks space (transmittance is 0 there).
     return scatter + space * trans;
 }
