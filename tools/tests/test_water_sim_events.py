@@ -111,9 +111,63 @@ def test_strength_bounded():
           + " / ".join(f"{a:.2f}" for a in amps))
 
 
+def entry_inputs(new, feet_in_water, first_person, camera_eye_in_water, eye_under_voxel, camera_dy, eye_dy, dt):
+    """(in water, downward speed) as the bookkeeping pass derives them. Old: camera immersion and
+    camera height. New: the player entity (feet, eye under the voxel surface, or the camera's
+    immersion only in first person, where the camera is the eye) and the eye height."""
+    if new:
+        feet = feet_in_water or (first_person and camera_eye_in_water) or eye_under_voxel
+        dy = eye_dy
+    else:
+        feet = feet_in_water or camera_eye_in_water
+        dy = camera_dy
+    vy = max(-dy / max(dt, 1e-3), 0.0) if abs(dy) < 5.0 else 0.0
+    return feet, vy
+
+
+def frame_from(b, dt, *signals):
+    feet, vy = entry_inputs(*signals, dt)
+    return b.frame(dt, feet, False, False, vy)
+
+
+def test_third_person_camera():
+    fps = 144
+    dt = 1 / fps
+    for new in (False, True):
+        b = Bookkeeping()
+        for _ in range(fps):                      # standing dry on a dock
+            frame_from(b, dt, new, False, False, False, False, 0.0, 0.0)
+        # Third person: tilting the view up swings the camera 3 blocks down, under the surface,
+        # in one frame; the player does not move.
+        frame_from(b, dt, new, False, False, True, False, -3.0, 0.0)
+        for _ in range(fps):
+            frame_from(b, dt, new, False, False, True, False, 0.0, 0.0)
+        if new:
+            assert not b.splashes, b.splashes
+        else:
+            assert b.splashes, "old logic was expected to splash here"
+    # A real jump seen from third person still splashes: the player's feet enter while the
+    # camera stays dry above.
+    b = Bookkeeping()
+    for _ in range(fps):
+        frame_from(b, dt, True, False, False, False, False, -0.05, -0.05)
+    for _ in range(10):                           # feet enter at 7 blocks/s, then stay in
+        frame_from(b, dt, True, True, False, False, False, -0.05, -0.05)
+    assert len(b.splashes) == 1 and b.splashes[0] > 0.3, b.splashes
+    # Fully under water in third person: feetInWater (isInShallowWater) may be false, the voxel
+    # surface above the eye keeps the player "in the water", so surfacing is not a new entry.
+    b = Bookkeeping()
+    for _ in range(fps * 2):
+        frame_from(b, dt, True, False, False, False, True, 0.0, 0.02)
+    assert not b.splashes and b.dry_ms == 0
+    print("third person: tilting the camera under the surface no longer splashes (old logic did); "
+          "a jump seen from behind still does, and a submerged player stays in the water")
+
+
 if __name__ == "__main__":
     test_keeps_stepping_after_leaving()
     test_one_splash_per_entry()
     test_no_false_splashes()
     test_strength_bounded()
+    test_third_person_camera()
     print("OK")

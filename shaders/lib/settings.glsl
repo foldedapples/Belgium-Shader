@@ -81,8 +81,12 @@ const float shadowDistance = 160.0; // [96.0 128.0 160.0 192.0 224.0 256.0]
 #define WATER_CAUSTICS // Caustics
 //#define WATER_VANILLA_TEXTURE // Vanilla Water Texture
 #define WATER_SIM // Interactive Water
-#define WATER_SIM_RES 1 // [0 1 2]
+#define WATER_SIM_RES 2 // [0 1 2 3]
 #define WATER_SIM_STRENGTH 1.0 // [0.5 0.75 1.0 1.5 2.0]
+#define WATER_SIM_SPEED 2.5 // [1.5 2.0 2.5 3.0 3.5 4.0]
+#define WATER_SIM_DAMPING 1 // [0 1 2]
+#define WATER_BOAT_WAKE 1.0 // [0.0 0.5 1.0 1.5 2.0]
+#define WATER_SPLASH_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 
 /*---------------------------------------------------------------- Clouds */
 #define VOLUMETRIC_CLOUDS // Volumetric Clouds

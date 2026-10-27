@@ -16,8 +16,10 @@
 const int SIM_N = 128;
 #elif WATER_SIM_RES == 1
 const int SIM_N = 256;
-#else
+#elif WATER_SIM_RES == 2
 const int SIM_N = 512;
+#else
+const int SIM_N = 1024;
 #endif
 const int SIM_CELLS_PER_BLOCK = 4;
 const float SIM_DX = 1.0 / float(SIM_CELLS_PER_BLOCK);
@@ -36,11 +38,23 @@ vec2 simLocal(vec2 playerXZ) {
     return (f - floor(f)) + playerXZ * float(SIM_CELLS_PER_BLOCK);
 }
 
-// Weight that fades the simulated field out towards the edge of the domain; `local` in cells
-// relative to the domain centre.
+// Distance from the domain centre as a fraction of the half-width; `local` in cells relative to
+// the domain centre. Radial, so neither the absorbing layer nor the visible fade has corners.
+float simRadius(vec2 local) { return length(local) / (0.5 * float(SIM_N)); }
+
+// Absorbing layer: extra per-step damping of the surface velocity, rising quadratically from 0
+// at 65 % of the half-width to 0.12 at the edge. Damping the velocity in a graded layer absorbs
+// outgoing waves; the old layer scaled the height itself by up to 8 % per step, which acts like
+// a change of stiffness and sent 13-23 % of each ring back towards the player
+// (tools/tests/test_water_propagation.py: < 1.5 % now, also on the smallest grid).
+float simSponge(vec2 local) {
+    float u = saturate((simRadius(local) - 0.65) / 0.35);
+    return 0.12 * u * u;
+}
+
+// Weight that fades the simulated field out towards the edge of the domain (rendering only).
 float simEdgeFade(vec2 local) {
-    vec2 d = abs(local) / (0.5 * float(SIM_N));
-    return 1.0 - smoothstep(0.7, 0.95, maxOf(d));
+    return 1.0 - smoothstep(0.62, 0.95, simRadius(local));
 }
 
 #endif

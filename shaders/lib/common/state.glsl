@@ -19,7 +19,7 @@ layout(std430, binding = 0) buffer MeridianState {
     vec4  lightVolumePrevOrigin; // begin: previous origin, for reprojection of the light volume
     vec4  cloudOffset;         // begin: xy cumulus wind offset (m), zw cirrus offset (m)
     vec4  skySH[9];            // prepare: sky irradiance / pi as order-2 SH (rgb)
-    vec4  misc;                // x: splash energy, y: previous swimming flag, zw cloud-shadow map centre (prepare)
+    vec4  misc;                // prepare: x player eye height at the last frame (water sim), y = x valid, zw cloud-shadow map centre
     ivec4 shadowAnchor;        // begin: xyz world block the light rotation pivots about, w = valid
     vec4  playerLast;          // prepare (water sim bookkeeping): feet at the latest stepped frame (xz relative to simCellsLast.xy), w in water
     vec4  vehicleLast;         // prepare (water sim bookkeeping): vehicle at the latest stepped frame (as playerLast), w valid

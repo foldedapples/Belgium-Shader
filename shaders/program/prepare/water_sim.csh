@@ -1,9 +1,22 @@
 // prepare1: interactive water. A height field h around the player obeys the damped 2D wave
 // equation, integrated with the explicit leapfrog scheme
-//     h' = h + (h - h_prev)(1 - damping) + k * laplacian(h),   k = (c dt / dx)^2
-// at a fixed step of 1/60 s. Stability of the 5-point scheme in 2D requires k <= 1/2. The ripple
-// speed is c = SIM_DX * sqrt(k) / dt: k = 0.02 gives ~2.1 blocks/s, about the phase speed of
-// 1-3 m water waves. (k = 0.32 gave 8.5 blocks/s; in game, ripples raced away from the player.)
+//     h' = h + v (1 - d - sponge) + k L(h) + nu L(v),   v = h - h_prev,  k = (c dt / dx)^2
+// at a fixed step of 1/60 s (L = 5-point Laplacian). The ripple speed is c = WATER_SIM_SPEED
+// blocks/s (default 2.5, the phase speed of ~4 m gravity waves; 8.5 blocks/s raced away from the
+// player). Short waves travel a little slower than long ones on the grid (numerical dispersion),
+// which is the same sense as real gravity waves: a splash spreads into a train of rings.
+//
+// Damping is frequency dependent, as in real water, where viscosity removes short ripples within
+// seconds but barely touches metre-scale waves: nu L(v) damps a wave of wavenumber kappa at a rate
+// ~ nu kappa^2, so grid-scale noise dies in a fraction of a second while the rings a body makes
+// keep going; d is a small uniform loss (WATER_SIM_DAMPING). The old single uniform loss (0.004
+// per step) killed long and short waves alike, so rings faded after a few blocks. Rings now
+// weaken mostly by spreading over a growing circle (amplitude ~ 1 / sqrt(r)), and leave through
+// the absorbing layer at the domain edge (lib/water/sim_common.glsl, simSponge) without
+// reflecting. Von Neumann stability (|g| <= 1 for every Laplacian eigenvalue 0..8) needs
+// 8k + 16nu <= 4 - 2(d + sponge); the largest option uses k = 0.071, far inside.
+// tools/tests/test_water_propagation.py runs this scheme: speed, range, decay, edge reflection,
+// stability and sleeping.
 //
 // Entry points (set by the wrapper):
 //   SIM_BOOKKEEPING  prepare1.csh     time accumulator, steps this frame, domain centre, water plane,
@@ -27,9 +40,16 @@
 #include "/lib/lighting/light_volume.glsl"
 
 const float SIM_DT = 1.0 / 60.0;
-const float SIM_K = 0.02;
-// Per-step amplitude loss; ~0.004 lets a ripple live ~4 s and travel ~8 blocks.
-const float SIM_DAMPING = 0.004;
+const float SIM_K = (WATER_SIM_SPEED * SIM_DT / SIM_DX) * (WATER_SIM_SPEED * SIM_DT / SIM_DX);
+// Uniform per-step velocity loss d and viscous coefficient nu (Low / Normal / High damping).
+// Normal: a hop's ring stays above a 0.02 slope out to ~19 blocks (old: ~13).
+#if WATER_SIM_DAMPING == 0
+const float SIM_DAMPING = 0.0004; const float SIM_VISCOSITY = 0.002;
+#elif WATER_SIM_DAMPING == 1
+const float SIM_DAMPING = 0.0009; const float SIM_VISCOSITY = 0.003;
+#else
+const float SIM_DAMPING = 0.0025; const float SIM_VISCOSITY = 0.004;
+#endif
 const float SOURCE_WATER_TOP = 0.889;   // top of a source water block within its block
 
 // Feet of the camera entity (normally the player) relative to the camera, in blocks.
@@ -93,9 +113,24 @@ void main() {
         state.vehicleLast.w = 0.0;
     }
 
-    bool feetIn = feetInWater || isEyeInWater == 1;
+    // Whether the player (not the camera) is in the water, and how fast their eye moves. The old
+    // test used isEyeInWater and the camera height, which belong to the camera: in third person
+    // the camera dips under the surface and jumps by metres when the view tilts or the
+    // perspective changes, which read as a fast entry and gave false splashes
+    // (tools/tests/test_water_sim_events.py). Now:
+    //   feetInWater    the player entity touching water (Iris: isInShallowWater, which may turn
+    //                  false once the player is fully under, hence the eye tests)
+    //   eye submerged  first person: isEyeInWater (the camera is the eye); any view: the
+    //                  voxelised water surface above the player's eye
+    //   eye height     camera minus relativeEyePosition (the entity, whatever the camera does)
+    float eyeY = cameraPosition.y - relativeEyePosition.y;    // y is never shifted by Iris
+    float eyeSurface = voxelWaterSurface(-relativeEyePosition);
+    bool eyeUnder = (firstPersonCamera && isEyeInWater == 1) || (eyeSurface > -1e3 && eyeY < eyeSurface);
+    bool feetIn = feetInWater || eyeUnder;
     bool bodyInWater = feetIn || (isRiding && vehicleInWater);
     float dt = clamp(frameTime, 0.0, 0.1);
+    float eyeDy = state.misc.y > 0.5 ? eyeY - state.misc.x : 0.0;
+    state.misc.xy = vec2(eyeY, 1.0);
 
     // Water entry -> splash. A small state machine: dry time accumulates in real time (also while
     // the simulation sleeps); the body touching water after >= 0.15 s dry while moving down is one
@@ -106,10 +141,9 @@ void main() {
     int pending = state.simFlags.w;
     if (feetIn) {
         if (dryMs >= 150 && !isRiding) {
-            float dy = cameraPosition.y - previousCameraPosition.y;   // the camera follows the body
-            float vy = abs(dy) < 5.0 ? max(-dy / max(frameTime, 1e-3), 0.0) : 0.0;   // not a teleport
+            float vy = abs(eyeDy) < 5.0 ? max(-eyeDy / max(frameTime, 1e-3), 0.0) : 0.0;   // not a teleport
             // Bounded amplitude in blocks: a hop (5 blocks/s) ~0.36, a high fall tends to 0.85.
-            float amp = 0.85 * (1.0 - exp(-vy / 9.0)) * smoothstep(1.5, 4.0, vy);
+            float amp = 0.85 * (1.0 - exp(-vy / 9.0)) * smoothstep(1.5, 4.0, vy) * WATER_SPLASH_STRENGTH;
             pending = max(pending, int(amp * 1000.0));
         }
         dryMs = 0;
@@ -131,13 +165,13 @@ void main() {
     state.simFlags = ivec4(steps > 0 ? 0 : state.simFlags.x, state.simFlags.y, dryMs, steps > 0 ? 0 : pending);
     // Base parity: the image holding the newest state before this frame's steps.
     int base = state.simParity;
-    // z: the splash this frame's first step applies (x1000).
-    state.simInfo = ivec4(base, steps, steps > 0 ? pending : 0, 0);
+    // z: the splash this frame's first step applies (x1000); w: the player is in the water.
+    state.simInfo = ivec4(base, steps, steps > 0 ? pending : 0, feetIn ? 1 : 0);
     state.simParity = (base + steps) & 1;
 
     ivec2 C = simCameraCell();
     bool riding = isRiding && vehicleInWater;
-    bool inWater = feetInWater || isEyeInWater == 1 || riding;
+    bool inWater = feetIn || riding;
 
     // Water plane: the surface of the water the body is in. The voxelised terrain gives it
     // exactly (also in shallow water and for boats); without it, the eye height is used (it sits
@@ -169,7 +203,7 @@ void main() {
         vec3 feet = feetRelative();
         vec3 veh = vehicleRelative();
         state.playerLast = vec4(corner.x + feet.x, cameraPosition.y + feet.y, corner.y + feet.z,
-                                (feetInWater || isEyeInWater == 1) ? 1.0 : 0.0);
+                                feetIn ? 1.0 : 0.0);
         state.vehicleLast = vec4(corner.x + veh.x, cameraPosition.y + veh.y, corner.y + veh.z, riding ? 1.0 : 0.0);
         state.simCellsLast = ivec4(C, 1, 0);
     }
@@ -193,11 +227,15 @@ layout(local_size_x = 16, local_size_y = 16) in;
 const ivec3 workGroups = ivec3(8, 8, 1);
 #elif WATER_SIM_RES == 1
 const ivec3 workGroups = ivec3(16, 16, 1);
-#else
+#elif WATER_SIM_RES == 2
 const ivec3 workGroups = ivec3(32, 32, 1);
+#else
+const ivec3 workGroups = ivec3(64, 64, 1);
 #endif
-layout(rg16f) uniform image2D waterSimA;
-layout(rg16f) uniform image2D waterSimB;
+// 32-bit: with long-lived waves, half-float rounding of h and h_prev broke volume conservation
+// and could leave a drifting offset that kept the field awake after a boat ride.
+layout(rg32f) uniform image2D waterSimA;
+layout(rg32f) uniform image2D waterSimB;
 layout(r16ui) uniform readonly uimage3D voxelImg;
 
 // World cell represented by texel t for a domain centred on cell c.
@@ -243,7 +281,7 @@ float disturbance(vec2 xz) {
     vec2 shift = vec2(state.simCells.zw - state.simCells.xy) * SIM_DX;
     float plane = state.simCenter.y;
     bool atSurface = abs(feetY + mix(0.6, 0.4, swim) - plane) < 1.2;
-    bool inWater = feetInWater || isEyeInWater == 1;
+    bool inWater = state.simInfo.w != 0;      // the player, as decided by the bookkeeping pass
     if (inWater && atSurface && state.playerPrev.w > 0.5) {
         float body = mix(0.25, 0.5, swim);
         vec2 prev = state.playerPrev.xz + shift;
@@ -265,9 +303,12 @@ float disturbance(vec2 xz) {
         if (dot(delta, delta) < 9.0) {
             for (int i = -1; i <= 1; i++) {
                 vec2 p = vp + fwd * float(i) * 0.6;
-                s -= (gauss(xz - p, 0.55) - gauss(xz - p + delta, 0.55)) * 0.2;
+                s -= (gauss(xz - p, 0.55) - gauss(xz - p + delta, 0.55)) * (0.2 * WATER_BOAT_WAKE);
             }
         }
+        // Faster than the ripples (2.5 blocks/s), the hull leaves a V-shaped wake behind it
+        // (half-angle asin(c / v), ~18 degrees at 8 blocks/s). A boat at rest moves no water, so
+        // stopping or leaving it ends the impulses while the waves already made run on.
     }
     return s * WATER_SIM_STRENGTH;
 }
@@ -293,19 +334,22 @@ void main() {
     vec2 local = vec2(cell - C) + 0.5;            // cells from the centre cell's corner
     vec2 xz = local * SIM_DX;                      // blocks, same frame as disturbance()
     if (state.simCenter.w > 0.5 && isWaterColumn(cell, state.simCenter.y)) {
-        float lap = 0.0;
+        // Laplacians of the height and of the velocity v = h - h_prev (the viscous term).
+        float v = h - hp;
+        float lap = 0.0, lapV = 0.0;
         const ivec2 o[4] = ivec2[4](ivec2(1, 0), ivec2(-1, 0), ivec2(0, 1), ivec2(0, -1));
         for (int i = 0; i < 4; i++) {
             ivec2 nt = simTexel(cell + o[i]);
-            float hn = parity == 0 ? imageLoad(waterSimA, nt).r : imageLoad(waterSimB, nt).r;
+            vec2 n = parity == 0 ? imageLoad(waterSimA, nt).rg : imageLoad(waterSimB, nt).rg;
             // Shore cells act as walls: mirror the centre value (Neumann boundary, reflects waves).
-            if (!isWaterColumn(cell + o[i], state.simCenter.y)) hn = h;
-            lap += hn;
+            if (!isWaterColumn(cell + o[i], state.simCenter.y)) n = vec2(h, hp);
+            lap += n.x;
+            lapV += n.x - n.y;
         }
         lap -= 4.0 * h;
-        next = h + (h - hp) * (1.0 - SIM_DAMPING) + SIM_K * lap;
-        // Sponge layer at the edge of the domain absorbs outgoing waves.
-        next *= mix(0.92, 1.0, simEdgeFade(local));
+        lapV -= 4.0 * v;
+        // The absorbing layer at the domain edge damps only the velocity (no reflections).
+        next = h + v * (1.0 - SIM_DAMPING - simSponge(local)) + SIM_K * lap + SIM_VISCOSITY * lapV;
         // Disturbances displace the surface: added to both time levels, so they move water without
         // adding vertical velocity. Adding them to the new level only acts as a force; with
         // realistic (slow) ripples a swimmer then piles energy up faster than it radiates.
@@ -313,7 +357,11 @@ void main() {
         next = clamp(next + D, -0.6, 0.6);
         prevOut = h + D;
         // Keep the simulation awake while any cell still moves (all writers store the same value).
-        if (abs(next) > 2e-4 || abs(next - h) > 2e-5) state.simFlags.x = 1;
+        // Thresholds are far below anything visible (a 2e-3 bump is a slope of < 1e-3). With
+        // long-lived waves, 2e-4 kept the field stepping for half a minute after the last visible
+        // ripple, held by the faint displacement a boat or swimmer leaves behind (it drains
+        // slowly through the absorbing layer).
+        if (abs(next) > 2e-3 || abs(next - h) > 1e-4) state.simFlags.x = 1;
     }
     vec4 outv = vec4(next, prevOut, 0.0, 0.0);
     if (parity == 0) imageStore(waterSimB, t, outv);

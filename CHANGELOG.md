@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased (2026-10-27)
+
+* Water simulation: frequency-dependent damping (short ripples fade, metre-scale rings travel on),
+  a reflection-free absorbing edge (radial, velocity damping), adjustable propagation speed and
+  damping, 32-bit field, larger Ultra area. A hop's ring stays visible to ~19.5 blocks (was
+  ~13); edge echoes 0.3-1.3 % (were 10-26 %). New options: Wave Propagation, Ripple Damping,
+  Boat Wake Strength, Player Splash Strength; Simulation Quality moved into Ripple Simulation.
+* Fix: false splashes when a third-person camera dipped under the surface; water entry now uses
+  the player's own feet and eye, not the camera.
+
 ## Unreleased (2026-10-26)
 
 * Repository tree replaced with the Meridian codebase (no Halcyon/Glimmer code).

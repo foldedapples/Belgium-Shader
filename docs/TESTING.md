@@ -11,6 +11,8 @@ python -P tools/tests/test_ripple_precision.py                   # rain-ripple c
 python -P tools/tests/test_wave_filter.py                        # water footprint prefilter
 python -P tools/tests/test_wave_speed.py                         # wave speed independent of position
 python -P tools/tests/test_water_sim_frames.py                   # ripple-sim inputs and frames
+python -P tools/tests/test_water_sim_events.py                   # ripple-sim sleeping, splashes, third person
+python -P tools/tests/test_water_propagation.py                  # ripple solver: speed, range, edge, stability (~3 min)
 python -P tools/tests/test_exposure_balance.py                   # End / Nether exposure and emission
 python -P tools/tests/test_rainbow.py                            # rainbow angles from water dispersion
 ```
