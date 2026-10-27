@@ -20,3 +20,7 @@
 * End: no dust veil, smooth rotating accretion disk, structured rings with shadows, galaxies
   instead of the Overworld Milky Way.
 * Settings: ten top-level categories with submenus.
+* Fix (second in-game feedback): End and Nether exposure, block light, End disk light, emission
+  adapted to exposure (no white lava or End stone); puddles about 8 % instead of 77 % of open
+  ground, new Puddle Size option; subtler cloud lean; larger default moon; HDR debug views.
+* Water simulation sleeps when idle and resets on dimension change.

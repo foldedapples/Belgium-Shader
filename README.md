@@ -75,6 +75,7 @@ textures, LUTs) are.
 * [Regression audit](docs/REGRESSION_AUDIT.md): what was wrong, the root causes, and the fixes
 * [Rendering research](docs/RENDERING_RESEARCH.md): verified Iris/DH facts, techniques, data sources
 * [Reference-pack research](docs/REVERSE_ENGINEERING_RESEARCH.md): how Eclipse, Bliss and Complementary approach each effect
+* [Graphics research](docs/GRAPHICS_RESEARCH.md): source-level study of Eclipse's water simulation, and our own designs
 * [Testing](docs/TESTING.md) · [Changelog](CHANGELOG.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Licence

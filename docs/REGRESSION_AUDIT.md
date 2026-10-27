@@ -115,6 +115,37 @@ shader errors. Root causes of what the screenshots showed:
   onto the rings.
 * **Saturated cyan shorelines.** Caustic focus was capped at 6×; it is now 3.5×.
 
+## From the second in-game screenshots (2026-10-27)
+
+Old and new values for the first two items are reproduced in `tools/tests/test_exposure_balance.py`.
+
+* **White End island, white lava, pink Nether.** Four causes:
+  * **Exposure metering.** The log-average used a 1e-6 floor (log₂ = −20) and counted the black
+    End/Nether sky at 30 % weight, so the meter thought the scene was dark and overexposed the
+    terrain. That is why the stars stayed faint while the stone went white. Sky pixels are no
+    longer counted in those dimensions.
+  * **Block light.** Level 15 was irradiance/π 4.0: brighter than direct sun and 12× the End's disk
+    light. An active End portal or a lava sea is level 15. It is now 1.6.
+  * **End disk light.** It was gated by vanilla sky light, which the End doesn't have, so the black
+    hole never lit the island and terrain away from the portal was black. The gate now applies in
+    the Overworld only.
+  * **Emission.** It was unbounded (lava 8 × albedo), with a Nether exposure floor of 0.8. Emission
+    is now adapted to the exposure with one factor per material, so texture contrast survives. The
+    Nether exposure floor is 0.12, the End exposure band 0.6–1.8× its reference, and the Nether
+    smoke is thinner.
+
+  Result: End stone by the portal 3.06 → 0.60 display, disk-lit End stone 0.02 → 0.14, lava peak
+  5.1 → 0.85.
+* **Puddles over most of the ground.** The field (mean ≈ 0.4) was compared against a full-wetness
+  threshold of 0.30, which gives 77 % coverage. The new field is domain-warped and the threshold is
+  calibrated on its distribution: about 8 % at the default amount. A Puddle Size option was added.
+  The wet film is now a sheen rather than a mirror, and rain streaks are fainter.
+* **Stretched night clouds.** The wind lean was 0.3–0.8 m per metre of height; it is now 0.06–0.18.
+* **Coloured light beyond ±30,000 blocks.** It was sampled in Iris' shifted frame while voxelised in
+  the unshifted one; it is now sampled from `cameraPositionInt/Fract`.
+* **Debug views 21–23.** Direct light, ambient plus block light, and emission, at the current
+  exposure.
+
 ## Reviewed, no fault found
 
 * End exposure and lighting: lit End stone lands near middle grey because exposure is clamped

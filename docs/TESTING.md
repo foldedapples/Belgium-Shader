@@ -11,7 +11,12 @@ python -P tools/tests/test_ripple_precision.py                   # rain-ripple c
 python -P tools/tests/test_wave_filter.py                        # water footprint prefilter
 python -P tools/tests/test_wave_speed.py                         # wave speed independent of position
 python -P tools/tests/test_water_sim_frames.py                   # ripple-sim inputs and frames
+python -P tools/tests/test_exposure_balance.py                   # End / Nether exposure and emission
 ```
+
+To find where an over-bright area comes from in game, use debug views 21 (direct light),
+22 (ambient + block light) and 23 (emission). Each shows that contribution at the current
+exposure.
 
 `validate.py` also fails if a dimension's Voxy shader copy differs from `program/voxy/` (Voxy
 compiles those files itself and cannot `#include`; they are not compiled by glslang here).
