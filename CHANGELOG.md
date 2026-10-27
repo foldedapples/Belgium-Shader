@@ -15,3 +15,8 @@
 * Feat: water waves prefiltered by the pixel footprint, with the lost slope variance moved into
   the roughness (no distant sparkle).
 * Docs: reference-pack research (docs/REVERSE_ENGINEERING_RESEARCH.md).
+* Fix (first in-game feedback): water waves no longer speed up near the player or in river/ocean
+  biomes; player and boat ripples work again; End portal starfield; no fade from black on load.
+* End: no dust veil, smooth rotating accretion disk, structured rings with shadows, galaxies
+  instead of the Overworld Milky Way.
+* Settings: ten top-level categories with submenus.

@@ -78,6 +78,43 @@ cascades while the camera walks, strafes, flies and turns (same test).
   now prefiltered by the pixel footprint and the lost slope variance becomes roughness
   (`lib/water/waves.glsl`, `test_wave_filter.py`).
 
+## From the first in-game screenshots (2026-10-27)
+
+The pack ran in Minecraft 1.21.11 with Iris 1.10.8, Sodium 0.8.12 and Voxy 0.2.16. The log showed no
+shader errors. Root causes of what the screenshots showed:
+
+* **Waves faster near the player.** A train's phase was k·x − ωt with k changing over time:
+  every train rotated with the slowly turning wind, and the long wavelengths and a river current
+  followed the player's smoothed biome. The apparent frequency at a point is then ω + x·dk/dt.
+  For the 0.55-block train it measured 1.4 to 82 rad/s depending on position, against a true
+  10.6, and 106 rad/s while walking into a river biome (`test_wave_speed.py`). The fix: fixed
+  lattice wave vectors in exact wrapped coordinates, with amplitude-only weather and biome, and
+  two-phase bounded advection (`lib/water/waves.glsl`, `lib/common/world_coord.glsl`).
+* **No player or boat ripples.**
+  * The water plane was one block low for a floating player, which in shallow water put it in
+    the river bed.
+  * `relativeVehiclePosition` (camera − vehicle, per the Iris source) was added instead of
+    subtracted.
+  * Cells, the body and the shore voxels used different coordinate frames (Iris shifts
+    `cameraPosition`).
+  * Fresh cells were compared against the wrong frame.
+
+  All fixed in `program/prepare/water_sim.csh` and `lib/water/sim_common.glsl`
+  (`test_water_sim_frames.py`).
+* **Black End portal.** `gbuffers_block` never read `blockEntityId`, so the portal was its dark
+  texture lit like stone. It now has its own parallax starfield (`lib/material/end_portal.glsl`).
+* **Fade in from black on load.** Auto exposure adapted from an uninitialised or stale value. It
+  now snaps to the target unless it ran on the previous frame, and TAA ignores never-written
+  history.
+* **Beige veil in the End.** The End dust was dense with a strong forward lobe toward the black
+  hole. It is now thin and confined to the island band.
+* **Banded accretion disk.** Differential rotation wound the advected pattern into ever finer
+  rings. It now uses two-phase advection over a bounded window.
+* **Repetitive rings.** The periodic sine profile was replaced by a ring-system optical depth with
+  ringlets, slant-path opacity, and shadows from the rings onto the planet and from the planet
+  onto the rings.
+* **Saturated cyan shorelines.** Caustic focus was capped at 6×; it is now 3.5×.
+
 ## Reviewed, no fault found
 
 * End exposure and lighting: lit End stone lands near middle grey because exposure is clamped

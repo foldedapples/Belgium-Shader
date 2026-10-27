@@ -42,8 +42,8 @@ ray-traced black hole in the End, a smoky Nether, and Distant Horizons / Voxy su
 * **Post:** TAA, bloom, auto exposure with night (Purkinje) vision, hue-preserving filmic tone
   mapping (or Khronos PBR Neutral), colour profiles Natural / Vibrant (default) / Cinematic /
   Realistic / Fantasy / Custom.
-* **Presets:** Low, Medium, High (default), Ultra, Cinematic. Settings in 23 screens (General …
-  Debugging). 20 debug views.
+* **Presets:** Low, Medium, High (default), Ultra, Cinematic. Settings in ten categories with
+  submenus. 20 debug views.
 
 ## Install
 

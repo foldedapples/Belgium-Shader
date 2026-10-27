@@ -9,6 +9,8 @@ python -P tools/tests/test_shadow_stability.py                   # cascade grid 
 python -P tools/tests/test_sun_glare.py                          # bloom of the sun disk
 python -P tools/tests/test_ripple_precision.py                   # rain-ripple coordinates
 python -P tools/tests/test_wave_filter.py                        # water footprint prefilter
+python -P tools/tests/test_wave_speed.py                         # wave speed independent of position
+python -P tools/tests/test_water_sim_frames.py                   # ripple-sim inputs and frames
 ```
 
 `validate.py` also fails if a dimension's Voxy shader copy differs from `program/voxy/` (Voxy
@@ -24,7 +26,27 @@ glslang is a reference front end, not the GPU driver. Driver-specific errors, Ir
 preprocessing (option rewriting, custom uniforms) and link-time interface mismatches between
 stages are **not** covered.
 
-## In game: not yet done
+## In game
+
+First run (2026-10-27, by the user): Minecraft 1.21.11, Iris 1.10.8, Sodium 0.8.12, Voxy 0.2.16,
+RTX 5070 Ti, near-Ultra settings. The pack loaded with no shader errors in `latest.log`.
+Screenshots showed:
+* wave speed changing with the player's position
+* no player ripples
+* a black End portal
+* a fade-in from black on load
+* a beige veil and banding in the End
+* repetitive rings
+* bright cyan shorelines
+* (reported) flickering shadows
+
+All except the shadow flicker are addressed in the 2026-10-27 commits and need re-checking.
+
+To report shadow flicker usefully: `/gamerule doDaylightCycle false`, stand still, then walk and
+turn. Use debug view 9 (cascade texel checker) and note whether the checker itself moves (a
+coordinate problem) or only the shadow edges shimmer (filtering or TAA).
+
+### Still to verify
 
 Nothing in this repository has been run in Minecraft since the 2026-10-26 fixes. Still to verify,
 on Minecraft 1.21.11 + Fabric + Sodium + Iris:
