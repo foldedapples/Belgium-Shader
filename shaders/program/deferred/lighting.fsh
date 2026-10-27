@@ -162,6 +162,7 @@ void main() {
     #endif
 
     vec3 color = vec3(0.0);
+    vec3 dbgDirect = vec3(0.0), dbgAmbientStart = vec3(0.0), dbgEmission = vec3(0.0);
     float skyVis = skyVisibility(gb.lightmap.y);
     vec3 shadowLight = vec3(1.0);
 
@@ -222,10 +223,12 @@ void main() {
         }
         #endif
         color += direct * lightIllum;
+        dbgDirect = direct * lightIllum;
     }
     #endif
 
     // ---------------------------------------------------------------- ambient
+    dbgAmbientStart = color;
     vec3 diffuseColor = m.metal ? vec3(0.0) : m.albedo;
     #ifdef WORLD_OVERWORLD
     vec3 skyAmb = skyIrradiance(n) * SKY_LIGHT_STRENGTH;
@@ -261,7 +264,9 @@ void main() {
     // ---------------------------------------------------------------- block light and emission
     color += diffuseColor * blockLightAt(playerPos, gb.geoNormal, gb.lightmap.x) * ao;
     color += diffuseColor * handLight(playerPos, n);
-    color += m.albedo * adaptedEmission(m.emission * EMISSION_STRENGTH * 8.0);
+    dbgEmission = m.albedo * adaptedEmission(m.emission * EMISSION_STRENGTH * 8.0);
+    vec3 dbgAmbient = color - dbgAmbientStart;      // ambient, sky, lightning, block and hand light
+    color += dbgEmission;
 
     // ---------------------------------------------------------------- environment specular weight
     float NoV = saturate(dot(n, v));
@@ -319,8 +324,13 @@ void main() {
     dbg = vec3(m.porosity, m.sss, puddle);
     #elif DEBUG_VIEW == 20
     dbg = sd.lod ? vec3(0.2, 0.6, 1.0) : vec3(0.6);
+    #elif DEBUG_VIEW >= 21 && DEBUG_VIEW <= 23
+    // HDR contributions at the current exposure (soft roll-off so overexposure stays readable):
+    // 21 direct light (sun / moon / End disk), 22 ambient + block light, 23 emission.
+    vec3 part = DEBUG_VIEW == 21 ? dbgDirect : DEBUG_VIEW == 22 ? dbgAmbient : dbgEmission;
+    dbg = 1.0 - exp(-part * state.exposure);
     #endif
-    #if DEBUG_VIEW <= 14 || DEBUG_VIEW == 20
+    #if DEBUG_VIEW <= 14 || (DEBUG_VIEW >= 20 && DEBUG_VIEW <= 23)
     outColor = vec4(dbg, 1.0);
     return;
     #endif

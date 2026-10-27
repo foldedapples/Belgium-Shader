@@ -148,7 +148,7 @@ const float shadowDistance = 160.0; // [96.0 128.0 160.0 192.0 224.0 256.0]
 #define TAA_SHARPNESS 0.4 // [0.0 0.2 0.4 0.6 0.8]
 
 /*---------------------------------------------------------------- Debug */
-#define DEBUG_VIEW 0 // [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20]
+#define DEBUG_VIEW 0 // [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23]
 
 /*---------------------------------------------------------------- Derived switches */
 // Iris's option scanner lists a toggle only when some #ifdef/#ifndef tests it directly, so

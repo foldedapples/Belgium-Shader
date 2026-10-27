@@ -273,3 +273,6 @@ value.DEBUG_VIEW.17=Reflection Hits
 value.DEBUG_VIEW.18=Exposure
 value.DEBUG_VIEW.19=HDR Clipping
 value.DEBUG_VIEW.20=LOD Depth
+value.DEBUG_VIEW.21=HDR: Direct Light
+value.DEBUG_VIEW.22=HDR: Ambient + Block Light
+value.DEBUG_VIEW.23=HDR: Emission
