@@ -93,21 +93,46 @@ void main() {
         state.vehicleLast.w = 0.0;
     }
 
-    bool bodyInWater = feetInWater || isEyeInWater == 1 || (isRiding && vehicleInWater);
-    // Sleep while nothing moves: no body in the water and no step last frame left a ripple above
-    // the threshold (the steps set simFlags.x). No dispatch work then, and no time accumulates.
-    bool awake = bodyInWater || state.simFlags.x != 0;
-    state.simFlags.x = 0;
-
+    bool feetIn = feetInWater || isEyeInWater == 1;
+    bool bodyInWater = feetIn || (isRiding && vehicleInWater);
     float dt = clamp(frameTime, 0.0, 0.1);
+
+    // Water entry -> splash. A small state machine: dry time accumulates in real time (also while
+    // the simulation sleeps); the body touching water after >= 0.15 s dry while moving down is one
+    // entry, whatever the frame rate. The splash waits (simFlags.w) until a frame that steps
+    // consumes it, so it is neither lost on frames without a step nor applied twice. Bobbing at the
+    // surface or a shoreline edge never re-arms it (no dry time); riding never splashes.
+    int dryMs = state.simFlags.z;
+    int pending = state.simFlags.w;
+    if (feetIn) {
+        if (dryMs >= 150 && !isRiding) {
+            float dy = cameraPosition.y - previousCameraPosition.y;   // the camera follows the body
+            float vy = abs(dy) < 5.0 ? max(-dy / max(frameTime, 1e-3), 0.0) : 0.0;   // not a teleport
+            // Bounded amplitude in blocks: a hop (5 blocks/s) ~0.36, a high fall tends to 0.85.
+            float amp = 0.85 * (1.0 - exp(-vy / 9.0)) * smoothstep(1.5, 4.0, vy);
+            pending = max(pending, int(amp * 1000.0));
+        }
+        dryMs = 0;
+    } else {
+        dryMs = min(dryMs + int(dt * 1000.0 + 0.5), 1000000);
+    }
+
+    // Sleep while nothing moves: no body in the water, no splash waiting, and the last frame that
+    // stepped left nothing moving (the steps set simFlags.x). The flag is cleared only on frames
+    // that step - those are the only ones that can set it again. (Clearing it every frame put the
+    // simulation to sleep on the first frame without a step - most frames above 60 FPS - so
+    // ripples froze the moment the player left the water or the boat.)
+    bool awake = bodyInWater || pending > 0 || state.simFlags.x != 0;
     float acc = awake ? state.simAccumulator + dt : 0.0;
-    int steps = min(int(acc / SIM_DT), 4);
+    int steps = min(int(acc / SIM_DT), 4);      // at most 4 catch-up steps after a long frame
     acc -= float(steps) * SIM_DT;
     acc = min(acc, SIM_DT);
     state.simAccumulator = acc;
+    state.simFlags = ivec4(steps > 0 ? 0 : state.simFlags.x, state.simFlags.y, dryMs, steps > 0 ? 0 : pending);
     // Base parity: the image holding the newest state before this frame's steps.
     int base = state.simParity;
-    state.simInfo = ivec4(base, steps, 0, 0);
+    // z: the splash this frame's first step applies (x1000).
+    state.simInfo = ivec4(base, steps, steps > 0 ? pending : 0, 0);
     state.simParity = (base + steps) & 1;
 
     ivec2 C = simCameraCell();
@@ -228,11 +253,10 @@ float disturbance(vec2 xz) {
         // Treading water: a faint zero-volume pulse keeps idle swimmers alive.
         s -= splashProfile(xz - feet) * 0.0015 * sin(frameTimeCounter * 3.0);
     }
-    // Entering the water: a splash proportional to the vertical speed.
-    if (inWater && state.playerPrev.w < 0.5 && state.simPrevCenter.w > 0.5) {
-        float vy = max(-(cameraPosition.y - previousCameraPosition.y) / max(frameTime, 1e-3), 0.0);
-        s -= splashProfile(xz - feet) * min(vy, 20.0) * 0.012;
-    }
+    // Entering the water: a crater (zero-volume profile) whose depth follows the entry speed,
+    // decided by the bookkeeping pass (simInfo.z). The old in-step version used 0.012 x speed:
+    // ring slopes of 0.02-0.13, no stronger than the ambient waves, so jumps showed nothing.
+    if (state.simInfo.z > 0) s -= splashProfile(xz - feet) * (float(state.simInfo.z) / 1000.0);
     if (isRiding && vehicleInWater && vehicleId == 2 && state.vehiclePrev.w > 0.5) {
         // Boat hull: three displacement points along the heading, moved like the body above.
         vec2 vp = corner + vehicleRelative().xz;
