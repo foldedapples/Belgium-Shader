@@ -1,6 +1,6 @@
 """Reference test for the footprint prefilter of the water waves (lib/water/waves.glsl).
 
-Ports waveTrain() (open ocean, default options) and checks:
+Ports the wave trains (open ocean, default options) and checks:
 1. retained + lost slope variance = the unfiltered total, for any footprint;
 2. near water (1 cm footprint) is unchanged; long swells survive a 1-block footprint while the
    0.55-block trains are removed;
@@ -12,27 +12,30 @@ Ports waveTrain() (open ocean, default options) and checks:
 
 import numpy as np
 
-TRAINS = 12
+TRAINS = 16
 G = 9.81
+LATTICE = 2 * np.pi / 1536
 
 
-def trains(swell=1.0, chop=0.6, calm=0.0, storm=0.0):
+def trains(swell=1.0, chop=0.6, calm=0.0, storm=0.0, wind=(1.0, 0.0)):
+    """waveVector() / waveAmplitude() of lib/water/waves.glsl: fixed lattice vectors, amplitude
+    from the steepness budget and the directional spreading function."""
     out = []
+    wind = np.array(wind)
     for i in range(TRAINS):
         fi = float(i)
-        u = (fi * 0.618034 + 0.13) % 1.0
-        lmax = 9.0 + (46.0 - 9.0) * swell
-        lam = lmax * (0.55 / lmax) ** (fi / (TRAINS - 1))
-        spread = 0.35 + (1.25 - 0.35) * fi / (TRAINS - 1)
-        ang = (u * 2 - 1) * spread + (((fi * 0.371) % 1.0) - 0.5) * 0.25
-        d = np.array([np.cos(ang), np.sin(ang)])
-        k = 2 * np.pi / lam
+        lam = 46.0 * (0.55 / 46.0) ** (fi / (TRAINS - 1))
+        ang = fi * 2.399963 + 0.5
+        kv = np.round(np.array([np.cos(ang), np.sin(ang)]) * (2 * np.pi / lam) / LATTICE) * LATTICE
+        k = np.linalg.norm(kv)
         longness = 1 - fi / (TRAINS - 1)
         energy = chop + (swell - chop) * longness ** 2
         energy *= 1.0 + (0.25 - 1.0) * calm * longness
         energy *= 1.0 + 0.9 * storm
-        a = 0.075 * energy / k
-        out.append((d, k, a, fi * 2.399963))
+        along = kv.dot(wind) / k
+        spread = 0.1 + 0.9 * np.clip(0.5 + 0.5 * along, 0, 1) ** 2
+        a = 0.1 * energy * spread / k
+        out.append((kv / k, k, a, fi * 2.399963))
     return out
 
 

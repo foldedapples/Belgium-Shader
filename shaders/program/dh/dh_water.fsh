@@ -34,7 +34,7 @@ void main() {
         // Same per-frequency footprint prefilter as vanilla water (gbuffers/translucent.fsh).
         float footprint = max(length(dFdx(vPlayerPos.xz)), length(dFdy(vPlayerPos.xz)));
         WaterParams wp = waterParamsAt(n, lm.y);
-        vec3 hg = waveHeightGradFiltered((vPlayerPos + cameraPosition).xz, frameTimeCounter, wp, footprint, lostSlopeVar);
+        vec3 hg = waveHeightGradFiltered(vPlayerPos.xz, frameTimeCounter, wp, footprint, lostSlopeVar);
         n = normalize(vec3(-hg.y, 1.0, -hg.z));
         #endif
     }

@@ -47,9 +47,8 @@ void main() {
     // rises through blocks at the shore. Flowing water and side faces stay put.
     if (vId == MAT_WATER && vNormal.y > 0.99) {
         WaterParams wp = waterParamsAt(vNormal, saturate((vLightmap.y - 0.5 / 16.0) * 16.0 / 15.0));
-        vec3 worldPos = playerPos + cameraPosition;
         float amp = waveSwellAmplitude(wp);
-        float h = waveSwellHeight(worldPos.xz, frameTimeCounter, wp);
+        float h = waveSwellHeight(playerPos.xz, frameTimeCounter, wp);
         playerPos.y += min(h - amp, 0.0) * 0.6;
     }
     #endif

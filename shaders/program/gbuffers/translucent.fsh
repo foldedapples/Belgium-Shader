@@ -74,7 +74,7 @@ void main() {
         float lostSlopeVar = 0.0;
         #ifdef WATER_WAVES
         WaterParams wp = waterParamsAt(n, lm.y);
-        vec3 hg = waveHeightGradFiltered(worldPos.xz, frameTimeCounter, wp, footprint, lostSlopeVar);
+        vec3 hg = waveHeightGradFiltered(vPlayerPos.xz, frameTimeCounter, wp, footprint, lostSlopeVar);
         vec2 grad = hg.yz;
         #else
         vec2 grad = vec2(0.0);

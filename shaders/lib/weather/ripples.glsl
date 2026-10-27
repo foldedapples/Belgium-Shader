@@ -6,21 +6,16 @@
 // circular capillary wave. Neighbouring cells overlap so rings interfere; two grids at different
 // scales keep the pattern irregular. Returns the height gradient d(h)/d(xz).
 //
-// Precision: the pattern is evaluated in world xz wrapped to RIPPLE_PERIOD blocks, built from
-// Iris's integer camera position, so it is exact anywhere in the world. Evaluated at the float
-// world position (camera + offset), the error grows with distance from 0,0: up to 2e-3 block at
-// x = 30000 (0.8 % of a ring wavelength), 0.06 block at x = 1e6 (25 %), where the rings jitter as
-// the camera moves (tools/tests/test_ripple_precision.py). The period is a
-// whole number of cells of both layers and the cell hash wraps with it, so crossing a period
-// boundary changes nothing.
-const int RIPPLE_PERIOD = 1536;          // 3072 cells of 0.5, 4096 cells of 0.375
+// Precision: the pattern is evaluated in exact wrapped world xz (lib/common/world_coord.glsl).
+// Evaluated at the float world position (camera + offset), the error grows with distance from
+// 0,0: up to 2e-3 block at x = 30000 (0.8 % of a ring wavelength), 0.06 block at x = 1e6 (25 %),
+// where the rings jitter as the camera moves (tools/tests/test_ripple_precision.py). The wrap
+// period is a whole number of cells of both layers and the cell hash wraps with it, so crossing a
+// period boundary changes nothing (3072 cells of 0.5, 4096 cells of 0.375 in 1536 blocks).
 
-int wrapInt(int a, int n) { return a >= 0 ? a - (a / n) * n : n - 1 - (-a - 1 - ((-a - 1) / n) * n); }
+#include "/lib/common/world_coord.glsl"
 
-vec2 rippleCoord(vec2 playerXZ) {
-    ivec2 ci = ivec2(wrapInt(cameraPositionInt.x, RIPPLE_PERIOD), wrapInt(cameraPositionInt.z, RIPPLE_PERIOD));
-    return vec2(ci) + cameraPositionFract.xz + playerXZ;
-}
+vec2 rippleCoord(vec2 playerXZ) { return wrappedWorldXZ(playerXZ); }
 
 vec2 rippleLayer(vec2 p, float t, float cellSize, float seed, int cellsPerPeriod) {
     vec2 g = p / cellSize;

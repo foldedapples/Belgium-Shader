@@ -36,9 +36,9 @@ vec3 underwaterLight(vec3 playerPos, vec3 lightDir) {
         vec3 att = exp(-waterAbsorption() * depth);
         #ifdef WATER_CAUSTICS
         if (lightDir.y > 0.05 && depth < 24.0) {
-            // Point on the surface above the receiver, back along the light.
-            vec3 world = playerPos + cameraPosition;
-            vec2 xz = world.xz + lightDir.xz / lightDir.y * depth * lightDir.y;
+            // Point on the surface above the receiver, back along the light (camera-relative, as
+            // the wave functions expect).
+            vec2 xz = playerPos.xz + lightDir.xz * depth;
             WaterParams wp = waterParamsAt(vec3(0.0, 1.0, 0.0), 1.0);
             const float e = 0.12;
             float dVert = depth * lightDir.y;
@@ -48,7 +48,9 @@ vec3 underwaterLight(vec3 playerPos, vec3 lightDir) {
             vec2 jx = vec2(1.0, 0.0) + (ox - o0) / e;
             vec2 jz = vec2(0.0, 1.0) + (oz - o0) / e;
             float det = abs(jx.x * jz.y - jx.y * jz.x);
-            float caustic = clamp(1.0 / max(det, 0.08), 0.0, 6.0);
+            // Peak focus limited to 3.5x (6x made shallow shorelines glow saturated cyan; the mean
+            // over the pattern stays ~1 either way).
+            float caustic = clamp(1.0 / max(det, 0.15), 0.0, 3.5);
             // Deep water blurs the pattern back towards uniform light.
             caustic = mix(caustic, 1.0, saturate(depth / 20.0));
             att *= caustic;
