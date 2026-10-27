@@ -1,15 +1,16 @@
-# Meridian Shaders
+# Meridian Shaders / Belgium Shader
 
 An original, physically based shader pack for Minecraft Java Edition on Iris, written from
-scratch (working title "Meridian"). Deferred renderer with LabPBR 1.3 materials, stable cascaded
+scratch. "Meridian" and "Belgium Shader" are working titles of the same pack; the final name is
+not decided. Deferred renderer with LabPBR 1.3 materials, stable cascaded
 shadows, a LUT atmosphere, volumetric clouds, real sky data from NASA, interactive water, a
 ray-traced black hole in the End, a smoky Nether, and Distant Horizons / Voxy support.
 
-> **Status: development build, not yet run in Minecraft.** Every program compiles for every
-> profile, dimension and LOD variant (4,245 stage compiles with Khronos glslang), the numerical
-> systems pass reference tests, the pack's own GLSL passes GPU unit tests, and the sky, clouds,
-> Moon, stars and black hole have been checked visually in a WebGL harness. In-game behaviour,
-> compatibility and performance are still to be verified — see docs/TESTING.md.
+> **Status: development build, not yet run in Minecraft.** Every program compiles under Khronos
+> glslang for every dimension, for the base / Distant Horizons / Voxy variants and all five quality
+> profiles, and the shadow and glare fixes pass CPU reference tests. In-game behaviour,
+> compatibility and performance are still to be verified. See [docs/TESTING.md](docs/TESTING.md)
+> and [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md).
 
 ## Features
 
@@ -20,7 +21,7 @@ ray-traced black hole in the End, a smoky Nether, and Distant Horizons / Voxy su
   from a live spherical-harmonic projection of the sky; bounced sunlight (reflective shadow
   maps); horizon-based AO; contact shadows.
 * **Stable shadows:** four texel-snapped cascades whose grid is anchored to the world, so static
-  shadows do not move when you walk, strafe, fly or turn (tested); physically sized soft shadows
+  shadows do not move when you walk, strafe, fly or turn (reference-tested, not yet in game); physically sized soft shadows
   (PCSS), coloured shadows through stained glass, cloud shadows, caustics under water.
 * **Coloured light:** torches, lava, soul fire, sea lanterns, froglights, redstone and more colour
   nearby surfaces; brightness follows vanilla light, so colour never leaks through walls.
@@ -41,44 +42,39 @@ ray-traced black hole in the End, a smoky Nether, and Distant Horizons / Voxy su
 * **Post:** TAA, bloom, auto exposure with night (Purkinje) vision, hue-preserving filmic tone
   mapping (or Khronos PBR Neutral), colour profiles Natural / Vibrant (default) / Cinematic /
   Realistic / Fantasy / Custom.
-* **Presets:** Low, Medium, High (default), Ultra, Cinematic. Settings in 21 screens (General …
+* **Presets:** Low, Medium, High (default), Ultra, Cinematic. Settings in 23 screens (General …
   Debugging). 20 debug views.
 
 ## Install
 
-1. Minecraft 1.21.11 with Fabric, Sodium 0.8.12 and Iris 1.10.8 (other versions: see
-   docs/COMPATIBILITY.md). Requires OpenGL 4.3 (not macOS).
-2. Run `python -P tools/package.py` and copy `dist/MeridianShaders-*.zip` into
-   `.minecraft/shaderpacks/` (or copy the repository folder there directly).
-3. Video Settings → Shader Packs → Meridian. Choose a profile at the top of the settings.
+1. Minecraft 1.21.11 with Fabric, Sodium and Iris. Requires OpenGL 4.3 (not macOS).
+2. Copy the repository folder (it must contain `shaders/`) into `.minecraft/shaderpacks/`, or zip
+   `shaders/`, `LICENSE` and `THIRD_PARTY_NOTICES.md` and put the zip there.
+3. Video Settings → Shader Packs → select the pack. Choose a profile at the top of the settings.
+
+Distant Horizons and Voxy are supported separately. Using both at once is not supported.
 
 ## Development
 
 ```
-python -I tools/gen_wrappers.py                       # after adding/renaming programs
-python -I tools/validate.py --variants base dh voxy   # compile everything (needs glslang)
+python -I tools/validate.py --variants base dh voxy --profiles   # compile everything (needs glslang)
+python -I tools/check_options.py                                 # settings menu consistency
 python -P tools/tests/test_shadow_stability.py
-python -P tools/tests/test_water_sim.py
-python -P tools/tests/test_cloud_march.py
-python -P tools/tests/test_haze_glare.py
-python -P tools/preview/build_preview.py              # WebGL sky preview + GPU unit tests
-python -P tools/package.py
-python -I tools/install_dev.py                        # copy into the test profile as Meridian-dev
-python -I tools/check_iris_log.py                     # Iris/Voxy errors from logs/latest.log
+python -P tools/tests/test_sun_glare.py
 ```
 
-Asset rebuild (downloads go to `raw/`, see docs/ASSET_SOURCES.md): `tools/prep_moon.py`,
-`tools/prep_stars.py`, `tools/gen_noise.py`, `tools/gen_dfg.py`.
+Files in `shaders/world0`, `world-1` and `world1` are thin wrappers that set the dimension define
+and include `shaders/program/...`. Edit the included program. Some source comments mention tools
+(`gen_wrappers.py`, `prep_moon.py`, `prep_stars.py`, `gen_noise.py`, `gen_dfg.py`, `package.py`) that
+were lost with an earlier working copy and are not in this repository. Their outputs (wrappers,
+textures, LUTs) are.
 
 ## Documentation
 
-* [Feature status](docs/FEATURE_STATUS.md) – what is implemented, what is verified and how
-* [Regression audit](docs/REGRESSION_AUDIT.md) – what went wrong before, root causes, fixes
-* [Rendering research](docs/RENDERING_RESEARCH.md) – verified Iris/Voxy/DH/LabPBR facts, data sources, techniques
-* [Architecture](docs/ARCHITECTURE.md) – frame, buffer ownership, algorithms, units
-* [Source provenance](docs/SOURCE_PROVENANCE.md) · [Asset sources](docs/ASSET_SOURCES.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
-* [Testing](docs/TESTING.md) · [Compatibility](docs/COMPATIBILITY.md) · [Performance](docs/PERFORMANCE.md)
-* [Milestones](docs/MILESTONES.md) · [Changelog](CHANGELOG.md)
+* [Feature status](docs/FEATURE_STATUS.md): what exists, what was reviewed, what is verified
+* [Regression audit](docs/REGRESSION_AUDIT.md): what was wrong, the root causes, and the fixes
+* [Rendering research](docs/RENDERING_RESEARCH.md): verified Iris/DH facts, techniques, data sources
+* [Testing](docs/TESTING.md) · [Changelog](CHANGELOG.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Licence
 

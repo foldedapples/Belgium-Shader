@@ -1,0 +1,66 @@
+# Regression audit (2026-10-26)
+
+What was wrong, why, and what changed. Each item was found by reading the pipeline, and where
+possible confirmed with a CPU reference test in `tools/tests/`. None of it has been checked in
+Minecraft yet (see [TESTING.md](TESTING.md)).
+
+## Repository state before this audit
+
+* `foldedapples/Belgium-Shader` `main` (ad5fa43 … bcc7b6a) and PR #1 all contained
+  Halcyon/Glimmer-derived code (`shaders/lib/halcyon/*`, `tools/import_halcyon.py`). That code
+  must not be used, so no earlier commit could serve as a clean "last working version".
+* The local `Meridian-dev` folder held the from-scratch Meridian pack (the same project under its
+  other working title) with no Halcyon or Glimmer code. Its `tools/` and `docs/` were missing.
+  Commit d34f1be put that tree on top of `main`. History was kept and nothing was force-pushed.
+
+## Shadows moving with the camera / head
+
+| Cause | Effect | Fix |
+|---|---|---|
+| Geometry is drawn with the TAA jitter added in clip space; every deferred/composite pass reconstructed positions with the unjittered `gbufferProjectionInverse` | Reconstructed world positions moved by up to ½ pixel per frame: 0.065 block at 100 blocks, 0.4 of a far-cascade texel. Shadow lookups, fog, SSR and TAA reprojection all wobbled | `sceneToView` / `viewToScene` in `lib/common/transform.glsl` remove/re-apply the jitter (vanilla and DH; Voxy draws unjittered) |
+| Cascade snapping pivoted the light rotation about the world origin | Every change of the light direction moved the texel grid by \|ΔL\| × (distance to 0,0,0). At x≈12,000 the sun's motion alone gave a fresh random sub-texel phase every frame. The float noise in view-space `sunPosition` when turning the head moved it about 1 cascade-0 texel | Snapping relative to `state.shadowAnchor`, a block within 32 blocks of the player (`program/begin/frame_setup.csh`). Drift: 0.50 → 0.02 texel/frame (`test_shadow_stability.py`) |
+
+Static geometry with a fixed light keeps its sub-texel phase to within 0.02 texel in all four
+cascades while the camera walks, strafes, flies and turns (same test).
+
+## Sun glare, highlights, moon
+
+* The sun disk was emitted at its physical radiance, about 16,000× display white, and saturated
+  every bloom level. It is now limited to 120× white at the current exposure (local adaptation,
+  `lib/sky/celestial.glsl`). Glare above 0.05 display units shrank from 3.5° to 1.5°
+  (`test_sun_glare.py`).
+* Smooth reflections drew the sun/moon disk from the sky fallback even though the BRDF already
+  adds the shadow-casting body as an analytic glint, so it was counted twice, and the second copy
+  was an aliased sub-pixel spot (`program/composite/translucent.fsh`, `lib/sky/sky.glsl`).
+* Directional specular used a point light. At the minimum alpha (0.0016), D ≈ 1e5 gave sub-pixel
+  sparkles that flickered under TAA. Alpha is now widened by the source's angular radius, and no
+  glint may exceed the limited disk (`lib/lighting/brdf.glsl`, `lighting.fsh`).
+* The Moon disk peak was 2.5× white, and its real peak was ~1.3× above the assumed one, so the
+  highlands clipped. It is now 1.6× (`lib/sky/moon.glsl`).
+
+## HDR / grading
+
+* Display contrast `(√c − 0.45)·k + 0.45` was not anchored at black. Vibrant (k = 1.06) turned
+  every display value below 0.00065 to pure black, and Cinematic (1.12) everything below 0.0026,
+  which crushed night and cave shadows. It is now a midtone-weighted curve with fixed black and
+  white points, monotonic for k in 0.7–1.4 (`lib/post/grading.glsl`).
+* Exposure metering, bloom energy (mix 0.045), tone curves and sRGB output were reviewed. No
+  further fault was found.
+
+## Volumetric clouds
+
+* Wind shear was 0.35·h × (wind displacement accumulated since loading), which grows without
+  bound. Clouds leaned more every minute until they sheared into flat streaks (after 10 km of
+  drift, a 220 m height step sampled noise 350 m away), and they popped when the offset wrapped.
+  Shear is now a fixed lean along the wind (`lib/clouds/clouds_common.glsl`).
+* Clouds moved against `windDirection()` (the noise was sampled at x + offset), opposite to the
+  rain and plants. They now move with it.
+* Cloud history is reprojected through the clouds' own wind motion (`clouds.csh`).
+
+## Reviewed, no fault found
+
+* End exposure and lighting: lit End stone lands near middle grey because exposure is clamped
+  around a reference derived from the disk light. The event horizon is a hard capture
+  (transmittance 0).
+* Volumetric light: the bright line through the sun is already prevented (cascade-edge fade).
+* Shadow atlas: quadrant discard and receiver tap clamping prevent cross-cascade bleeding.
