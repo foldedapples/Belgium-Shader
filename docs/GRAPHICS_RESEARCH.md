@@ -118,7 +118,27 @@ terrain, fog and clouds, plus an optional shadow map aimed from the bolt.
 **Not yet studied at source level:** aurora, rainbows, shader grass (geometry and tessellation
 stages), snow, emissive ores and trims, chunk fading.
 
-## 5. Status of the requested features in this pack
+## 5. Features added after the study (2026-10-27), all original
+
+* **Rainbows** (`lib/sky/sky.glsl`). Each wavelength is placed at its minimum-deviation angle,
+  computed from water's refractive index n(λ) (Cauchy fit through measured values):
+  * primary bow: 4r − 2i;
+  * secondary bow: π − (6r − 2i), with the colours reversed;
+  * Alexander's dark band between them.
+
+  `tools/tests/test_rainbow.py` puts the primary at 42.45° to 40.58° and the secondary at 50.23°
+  to 53.59°. The bow appears after rain while the air is still wet and the sun is below 42°.
+* **Aurora.** Folded emission curtains with vertical rays, sampled on altitude shells between
+  100 and 280 km. Colour comes from altitude (557.7 nm green low, 630 nm red high). It appears on
+  some nights by default.
+* **Snow cover.** A material-level overlay in snowy biomes on exposed upward faces, patchy
+  along a noise edge. It has no geometry stage, so it costs nothing elsewhere.
+* **Emissive ores** (option, off by default). Only the mineral specks glow; ores now have their own
+  block ID.
+* **Distant Horizons chunk fade.** A dithered hand-over from vanilla chunks to the DH terrain
+  underneath, resolved by TAA.
+
+## 6. Status of the requested features in this pack
 
 These exist in the code:
 - the interactive simulation (above)
@@ -128,15 +148,14 @@ These exist in the code:
 - volumetric clouds and cirrus
 
 **Not implemented yet:**
-- shader grass
-- shader snow overlays
-- aurora
-- rainbows
-- lightning shadows
-- emissive armour trims
-- Distant Horizons chunk fading
-- 1.21.11 chunk fade-in
-- Photonics and Caelum integration
+- shader grass: needs a geometry or tessellation stage whose cost must be measured first; Iris
+  compiles such stages for the whole program even when an option turns the effect off
+- lightning shadows: needs a second shadow projection aimed from the bolt
+- emissive armour trims: trims are not distinguishable from other armour layers in the stages
+  checked
+- chunk fading for Voxy
+- the 1.21.11 chunk fade-in: no per-chunk age is exposed to shaders that we could verify
+- Photonics and Caelum integration: not researched; nothing implemented and nothing claimed
 
 Each needs its own design and in-game testing. In particular, shader grass needs a geometry or
 tessellation stage whose cost must be measured before it goes into any preset.

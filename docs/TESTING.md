@@ -12,6 +12,7 @@ python -P tools/tests/test_wave_filter.py                        # water footpri
 python -P tools/tests/test_wave_speed.py                         # wave speed independent of position
 python -P tools/tests/test_water_sim_frames.py                   # ripple-sim inputs and frames
 python -P tools/tests/test_exposure_balance.py                   # End / Nether exposure and emission
+python -P tools/tests/test_rainbow.py                            # rainbow angles from water dispersion
 ```
 
 To find where an over-bright area comes from in game, use debug views 21 (direct light),

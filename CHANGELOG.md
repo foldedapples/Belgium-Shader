@@ -24,3 +24,5 @@
   adapted to exposure (no white lava or End stone); puddles about 8 % instead of 77 % of open
   ground, new Puddle Size option; subtler cloud lean; larger default moon; HDR debug views.
 * Water simulation sleeps when idle and resets on dimension change.
+* Feat: physically based rainbows (primary, secondary, Alexander's dark band), aurora (some
+  nights), snow cover in snowy biomes, optional emissive ores, Distant Horizons chunk fade.
