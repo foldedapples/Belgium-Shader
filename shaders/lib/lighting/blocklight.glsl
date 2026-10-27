@@ -56,7 +56,10 @@ vec3 blockLightAt(vec3 playerPos, vec3 normal, float blockLight) {
         }
     }
     #endif
-    return color * blockLightFalloff(blockLight) * (4.0 * BLOCKLIGHT_STRENGTH);
+    // Level 15 next to the source: irradiance / pi = 1.6 (with albedo 0.7, about half the radiance
+    // of sunlit ground). It was 4.0, brighter than direct sun and 12x the End's disk light, so an
+    // active End portal (level 15) or a lava sea washed everything around it to white.
+    return color * blockLightFalloff(blockLight) * (1.6 * BLOCKLIGHT_STRENGTH);
 }
 
 // Light carried by the player (held emitters): a point light at the eye using vanilla's linear

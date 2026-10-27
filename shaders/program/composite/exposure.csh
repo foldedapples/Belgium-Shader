@@ -32,8 +32,15 @@ void main() {
     if (isnan(l) || isinf(l)) l = 0.0;
     vec2 d = (uv - 0.5) * vec2(1.6, 2.2);
     float w = exp(-dot(d, d) * 2.0) + 0.05;
+    // Sky pixels: 30 % weight in the Overworld; none in the End and the Nether, whose sky is black
+    // space or void. The log average is a geometric mean, so even a few black pixels pulled it down
+    // by stops (log2 of the old 1e-6 floor is -20) and the terrain was overexposed to white.
+    #if defined WORLD_END || defined WORLD_NETHER
+    if (resolveDepth(uv, false, false).sky) w *= 0.002;
+    #else
     if (resolveDepth(uv, false, false).sky) w *= 0.3;
-    sLog[tid] = log2(max(l, 1e-6)) * w;
+    #endif
+    sLog[tid] = log2(max(l, 1e-4)) * w;
     sW[tid] = w;
     barrier();
     // Fold 576 values into 512, then a power-of-two tree reduction.
@@ -54,9 +61,12 @@ void main() {
         #ifdef WORLD_END
         // Reference: End stone (albedo ~0.35) lit by the disk (lib/space/end_sky.glsl).
         float refEnd = 0.18 / (0.35 * 3.2 * END_LIGHT_STRENGTH * INV_PI + 0.01);
-        target = clamp(target, refEnd * 0.35, refEnd * 2.5);
+        // The End's light is constant, so only a narrow band of adaptation around that reference
+        // (a portal or end rods in view must not drag the disk-lit island into darkness).
+        target = clamp(target, refEnd * 0.6, refEnd * 1.8);
         #elif defined WORLD_NETHER
-        target = clamp(target, 0.8, 24.0);
+        // Wide band: a lava sea fills the view with emitters far brighter than the rock around it.
+        target = clamp(target, 0.12, 24.0);
         #endif
         target *= exp2(EXPOSURE_BIAS);
         float prev = state.exposure;

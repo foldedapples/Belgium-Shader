@@ -155,14 +155,16 @@ void main() {
     for (int i = 0; i < VL_STEPS; i++) {
         float t = (float(i) + noise) * stepLen;
         vec3 wp = dir * t + cameraPosition;
-        float dens = 0.006 * NETHER_FOG_DENSITY;
+        // Thinner, dimmer smoke: at 0.006 and haze x 2.5 + lava glow x 1.5 it formed a ~60 % opaque
+        // glowing layer that washed the Nether pink. Still dense enough to read as smoke at range.
+        float dens = 0.0038 * NETHER_FOG_DENSITY;
         #ifdef NETHER_SMOKE
         vec3 q = wp * 0.045 + vec3(0.0, -frameTimeCounter * 0.08, frameTimeCounter * 0.03);
         float n = valueNoise(q) * 0.6 + valueNoise(q * 2.3) * 0.3 + valueNoise(q * 5.1) * 0.1;
         dens *= 0.35 + 1.6 * smoothstep(0.35, 0.8, n);
         #endif
         dens *= 0.6 + 0.4 * exp(-max(wp.y - 40.0, 0.0) / 60.0);
-        vec3 light = haze * 2.5 + lavaGlow(wp.y) * 1.5;
+        vec3 light = haze * 1.6 + lavaGlow(wp.y) * 0.7;
         float stepT = exp(-dens * stepLen);
         scatter += T * light * (1.0 - stepT);
         T *= stepT;

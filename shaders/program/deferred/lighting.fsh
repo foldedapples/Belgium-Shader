@@ -69,6 +69,17 @@ const bool colortex6Clear = true;
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outSpecWeight;
 
+// Emitters under local adaptation (as the sun disk, lib/sky/celestial.glsl): a surface emitting
+// `strength` x albedo would display at strength x exposure; that peak is compressed smoothly
+// towards EMISSION_DISPLAY_PEAK x display white. Lava at strength 8 used to display at 6x white in
+// the Nether and clipped to a white sheet. The factor depends on the material's strength and the
+// exposure only - not on the pixel - so the texture's own contrast is kept.
+const float EMISSION_DISPLAY_PEAK = 2.5;
+float adaptedEmission(float strength) {
+    float ex = max(state.exposure, 1e-6);
+    return strength / (1.0 + strength * ex / EMISSION_DISPLAY_PEAK);
+}
+
 // Joint-bilateral upsampling of a half-resolution buffer guided by depth and normal.
 vec4 upsampleHalf(sampler2D tex, vec2 uv, float linDepth, vec3 normal) {
     vec2 halfSize = vec2(textureSize(tex, 0));
@@ -135,7 +146,7 @@ void main() {
     if (dot(n, v) < 0.0) n = normalize(n + v * (-dot(n, v) + 0.02));
 
     if (hasFlag(gb.flags, FLAG_UNLIT)) { outColor = vec4(gb.albedo * 0.5, 1.0); return; }
-    if (gb.id == MAT_EMISSIVE_FLAT) { outColor = vec4(gb.albedo * 6.0 * EMISSION_STRENGTH, 1.0); return; }
+    if (gb.id == MAT_EMISSIVE_FLAT) { outColor = vec4(gb.albedo * adaptedEmission(6.0 * EMISSION_STRENGTH), 1.0); return; }
 
     float puddle = 0.0;
     #ifdef WORLD_OVERWORLD
@@ -191,8 +202,12 @@ void main() {
         }
         // Parallax self-shadowing from the G-buffer.
         sh.light *= mix(1.0, gb.parallaxShadow, 0.9);
-        // Light that only reaches faces open to the sky (vanilla sky light 0 means enclosed).
+        // Light that only reaches faces open to the sky (vanilla sky light 0 means enclosed). Only in
+        // the Overworld: the End has no sky light at all, so this gate switched the black hole's
+        // light off everywhere and only block light (the portal) lit the island.
+        #ifdef WORLD_OVERWORLD
         sh.light *= smoothstep(0.0, 0.2, gb.lightmap.y + (sd.lod ? 1.0 : 0.0)) * 0.98 + 0.02 * float(hand);
+        #endif
         shadowLight = sh.light;
         LightSample ls = evalDirectional(m, n, v, lightDir, sunAng);
         #ifdef WORLD_OVERWORLD
@@ -246,7 +261,7 @@ void main() {
     // ---------------------------------------------------------------- block light and emission
     color += diffuseColor * blockLightAt(playerPos, gb.geoNormal, gb.lightmap.x) * ao;
     color += diffuseColor * handLight(playerPos, n);
-    color += m.albedo * m.emission * EMISSION_STRENGTH * 8.0;
+    color += m.albedo * adaptedEmission(m.emission * EMISSION_STRENGTH * 8.0);
 
     // ---------------------------------------------------------------- environment specular weight
     float NoV = saturate(dot(n, v));
