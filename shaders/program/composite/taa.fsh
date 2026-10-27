@@ -107,6 +107,9 @@ void main() {
 
     bool offscreen = any(lessThan(prevUv, vec2(0.0))) || any(greaterThan(prevUv, vec2(1.0)));
     vec3 hist = offscreen ? cur : sampleHistoryCatmullRom(prevUv);
+    // History never written (first frames after loading) is exactly zero: start from the current
+    // frame instead of fading in from black.
+    if (maxOf(hist) <= 0.0) hist = cur;
     vec3 histY = toYCoCg(tonemapTAA(hist));
     vec3 lo = m1 - sigma * 1.25, hi = m1 + sigma * 1.25;
     // Clip towards the neighbourhood mean (preserves hue better than clamping).

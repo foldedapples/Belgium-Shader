@@ -60,7 +60,13 @@ void main() {
         #endif
         target *= exp2(EXPOSURE_BIAS);
         float prev = state.exposure;
-        if (!(prev > 0.0) || isinf(prev)) prev = target;
+        // Adapt only from a value this pipeline wrote on the frame before. On the first frame after
+        // loading or reloading the pack, or after another pipeline (dimension) ran, the stored value
+        // is uninitialised or stale; adapting from it took seconds and showed as a fade in from
+        // black. Start at the target instead (normal eye adaptation is unchanged).
+        bool continuous = state.exposureInfo.y == 1 && state.exposureInfo.x == frameCounter - 1;
+        if (!continuous || !(prev > 0.0) || isinf(prev) || isnan(prev)) prev = target;
+        state.exposureInfo = ivec4(frameCounter, 1, 0, 0);
         float dt = clamp(frameTime, 0.0, 0.2);
         float speed = (target > prev ? 1.2 : 2.5) * ADAPTATION_SPEED;
         float ex = exp2(mix(log2(prev), log2(target), 1.0 - exp(-dt * speed)));
