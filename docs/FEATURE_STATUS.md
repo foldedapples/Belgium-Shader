@@ -9,18 +9,18 @@ its implementation was read and corrected in the 2026-10-26 audit
 |---|---|---|---|
 | Stable cascaded shadows, PCSS, coloured shadows | yes | yes | jitter and pivot fixes; reference-tested |
 | HDR, auto exposure, bloom, tone mapping, 6 colour profiles | yes | yes | sun-disk limit; contrast fix |
-| Sun, Moon (2K/4K/8K NASA), phases, eclipses, stars, Milky Way | yes | partly | glare and Moon peak fixed; star/Milky Way code not reviewed |
-| Volumetric clouds (stratus … cumulonimbus, cirrus, shadows) | yes | yes | shear, wind direction, reprojection fixed |
+| Sun, Moon (2K/4K/8K NASA), phases, eclipses, stars, Milky Way | yes | partly | glare and Moon peak fixed; star twinkling added 2026-10-27 (model-tested, awaiting in-game check) |
+| Volumetric clouds (stratus … cumulonimbus, cirrus, shadows) | yes | yes | shear, wind direction, reprojection fixed; weather map, types and lighting rebuilt 2026-10-27 (model-tested, awaiting in-game check of look and cost) |
 | LabPBR 1.3, GGX BRDF, SSS, POM | yes | yes | checked against the spec; metal tint fixed |
 | SSR with sky fallback | yes | partly | jitter and double-sun fixes |
-| Water waves, simulation, refraction, caustics | yes | yes | in-game: speed bug and missing ripples fixed 2026-10-27 (awaiting re-check); refraction not re-reviewed |
+| Water waves, simulation, refraction, caustics | yes | yes | in-game: speed bug and missing ripples fixed 2026-10-27 (awaiting re-check); ripple propagation, absorbing edge and third-person splash fix 2026-10-27 (model-tested); refraction not re-reviewed |
 | Rain, wetness, puddles, ripples, lightning | yes | partly | ripple precision fixed; rain streaks and lightning not reviewed |
 | Coloured block light (voxel flood fill), RSM bounce, AO | yes | jitter only | |
 | The End: space, planets, black hole, disk light | yes | yes | in-game: veil, disk banding, rings, portal fixed 2026-10-27; galaxies replace the Milky Way; planets still procedural (NASA maps not yet integrated) |
 | Nether smoke, heat haze, ash | yes | no | |
 | Distant Horizons | yes | jitter only | compiles; untested in game |
 | Voxy | yes | no | compiles; no public interface docs to check against |
-| Settings: 10 categories (27 screens), 5 profiles, 112 options | yes | yes | `check_options.py`: no dead controls |
+| Settings: 10 categories (27 screens), 5 profiles, 132 options | yes | yes | `check_options.py`: no dead controls |
 | Held lantern | hand light only | no | a swinging 3D lantern needs a resource pack plus an animation mod; GLSL alone cannot animate the held model |
 | Startup exposure | yes | yes | no fade from black after (re)load (2026-10-27, awaiting re-check) |
 | Shadow flicker (reported in game) | — | open | needs a repro: debug view 9 with time frozen; see TESTING.md |

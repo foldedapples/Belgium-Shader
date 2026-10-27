@@ -69,6 +69,26 @@ coordinate problem) or only the shadow edges shimmer (filtering or TAA).
   * if it doesn't stop, check debug view 18 (Exposure) for pulsing, and view 11 (Coloured Light
     Volume).
 
+### Water propagation, clouds and star twinkling (2026-10-27, second batch)
+
+Model tests (`test_water_propagation.py`, `test_cloud_weather.py`, `test_star_twinkle.py`) cover
+the maths. These need the game:
+
+* **Ripples.** Hop into still water: debug view 24 should show a ring crossing ~20 blocks
+  without a square edge or an echo coming back. Walk, sprint, swim and ride a boat; stop the
+  boat and step out: the wake keeps spreading, no new rings appear from the idle boat, and the
+  status strip's "still moving" goes red within ~25 s.
+* **No false splashes.** Stand dry on a dock in third person (F5) and tilt the view so the
+  camera dips under the surface: "splash applied" must stay off. Swim fully under in F5 and
+  surface: no splash.
+* **Clouds.** Clear weather at Coverage 0.45: some regions of open sky, some cloud groups, some
+  banks; clouds should look bright, not grey. `/weather rain` then `/weather thunder`: overcast,
+  then tall dark storm cells. Sunrise, sunset and moonlit nights. Fly to cloud level and above.
+  Watch for a seam or jump (there should be none) and for GPU time
+  (F3 or an overlay) against the previous version at the same profile.
+* **Stars.** A clear night with time frozen: stars near the horizon twinkle more than those
+  overhead; no star vanishes; the Milky Way glow is steady; TAA on and off; 30 and 144 FPS caps.
+
 ### Still to verify
 
 Still to verify after the 2026-10-27 fixes,
