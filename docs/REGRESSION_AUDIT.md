@@ -57,6 +57,27 @@ cascades while the camera walks, strafes, flies and turns (same test).
   rain and plants. They now move with it.
 * Cloud history is reprojected through the clouds' own wind motion (`clouds.csh`).
 
+## Water, weather, materials (second pass, 2026-10-26)
+
+* **Interactive water wakes missing in tiles.** Invocation (0,0) of the simulation step rewrote
+  the player/vehicle history in the shared state buffer while every other invocation of the
+  same dispatch read it to build the bow wave. Workgroups that ran later saw no motion. The
+  history is now rolled in the single-invocation bookkeeping pass, before the steps
+  (`program/prepare/water_sim.csh`).
+* **Rain ripples jittering far from spawn.** They were evaluated at float camera + offset: up to
+  0.8 % of a ring wavelength of error at x = 30,000 and 25 % at x = 10^6. They now use Iris'
+  integer camera position wrapped to a 1536-block period with wrapped cell hashes, which is
+  exact and seamless (`lib/weather/ripples.glsl`, `test_ripple_precision.py`).
+* **The sea popping once an hour.** `frameTimeCounter` wraps at 3600 s and each wave train
+  jumped phase. Frequencies are now rounded to whole cycles per hour. Flowing-water advection
+  still jumps at the wrap.
+* **LabPBR predefined metals untinted.** The spec says the albedo tints their reflections; the
+  tint is now applied. The built-in vanilla metals (and the Voxy adapter) moved to code 255 so
+  vanilla gold and copper are not tinted twice.
+* **Distant water sparkling.** Wave normals had no per-frequency filtering. Each component is
+  now prefiltered by the pixel footprint and the lost slope variance becomes roughness
+  (`lib/water/waves.glsl`, `test_wave_filter.py`).
+
 ## Reviewed, no fault found
 
 * End exposure and lighting: lit End stone lands near middle grey because exposure is clamped
@@ -64,3 +85,10 @@ cascades while the camera walks, strafes, flies and turns (same test).
   (transmittance 0).
 * Volumetric light: the bright line through the sun is already prevented (cascade-edge fade).
 * Shadow atlas: quadrant discard and receiver tap clamping prevent cross-cascade bleeding.
+* Water simulation stability (k = 0.02 ≤ 0.5), teleport rejection, domain recentring
+  (toroidal grid, fresh cells cleared), low FPS (dt clamp, at most 4 steps per frame).
+* Wetness and puddles: sky-exposure and biome gating, porosity darkening, puddles only on
+  exposed upward faces.
+* LabPBR normal convention: the tangent frame follows +V, matching LabPBR's DirectX (Y-down)
+  maps.
+* Cloud shadow map: snapped centre, written by one invocation and read only by later passes.

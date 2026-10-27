@@ -74,6 +74,7 @@ textures, LUTs) are.
 * [Feature status](docs/FEATURE_STATUS.md): what exists, what was reviewed, what is verified
 * [Regression audit](docs/REGRESSION_AUDIT.md): what was wrong, the root causes, and the fixes
 * [Rendering research](docs/RENDERING_RESEARCH.md): verified Iris/DH facts, techniques, data sources
+* [Reference-pack research](docs/REVERSE_ENGINEERING_RESEARCH.md): how Eclipse, Bliss and Complementary approach each effect
 * [Testing](docs/TESTING.md) · [Changelog](CHANGELOG.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Licence

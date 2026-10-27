@@ -7,7 +7,12 @@ python -I tools/validate.py --variants base dh voxy --profiles   # glslang, ever
 python -I tools/check_options.py                                 # settings menu consistency
 python -P tools/tests/test_shadow_stability.py                   # cascade grid maths
 python -P tools/tests/test_sun_glare.py                          # bloom of the sun disk
+python -P tools/tests/test_ripple_precision.py                   # rain-ripple coordinates
+python -P tools/tests/test_wave_filter.py                        # water footprint prefilter
 ```
+
+`validate.py` also fails if a dimension's Voxy shader copy differs from `program/voxy/` (Voxy
+compiles those files itself and cannot `#include`; they are not compiled by glslang here).
 
 `validate.py` inlines `#include`s the way Iris does and injects Iris' built-in macros (and the DH
 `dhMaterialId` attribute). It then compiles each program in `world0`, `world-1` and `world1` with
