@@ -195,7 +195,7 @@ void main() {
     if (hc.y > 0.0 && (depth >= 1.0)) {
         float tc = camAlt < CIRRUS_ALTITUDE ? hc.y : hc.x;
         vec3 pc = ro + dir * tc;
-        vec2 xz = cameraPosition.xz + dir.xz * tc + state.cloudOffset.zw;
+        vec2 xz = cameraPosition.xz + dir.xz * tc - state.cloudOffset.zw;
         vec2 wdir = windDirection();
         // Gentle stretch along the wind (1.4x) avoids the repeated-streak look of strong stretching.
         mat2 align = mat2(wdir.x, -wdir.y, wdir.y, wdir.x);
@@ -274,6 +274,8 @@ void main() {
     vec3 viewPos = screenToView(uv, 1.0, gbufferProjectionInverse);
     vec3 dir = normalize(mat3(gbufferModelViewInverse) * viewPos);
     vec3 worldP = dir * dist + cameraPosition;
+    // The cloud itself moved downwind since the last frame (same rate as begin.csh integrates).
+    worldP.xz -= windDirection() * ((6.0 + 14.0 * windStrength()) * CLOUD_SPEED * clamp(frameTime, 0.0, 0.1));
     vec3 prevPlayer = worldP - previousCameraPosition;
     vec3 prevView = mat3(gbufferPreviousModelView) * prevPlayer;
     vec3 prevScreen = viewToScreen(prevView, gbufferPreviousProjection);

@@ -2,6 +2,7 @@
 #define MERIDIAN_CLOUDS_COMMON
 
 #include "/lib/common/math.glsl"
+#include "/lib/common/wind.glsl"
 #include "/lib/atmosphere/atmosphere.glsl"
 
 // Volumetric cloud model shared by the cloud march (deferred compute), the cloud shadow map
@@ -11,7 +12,8 @@
 // CLOUD_ALTITUDE .. CLOUD_ALTITUDE + 2200 m by default; storm towers reach 9 km. Cirrus is a
 // separate thin layer at 8.5 km.
 //
-// Weather map (world xz, metres, moving with the integrated wind in state.cloudOffset):
+// Weather map (world xz, metres, moving with the integrated wind in state.cloudOffset; noise is
+// sampled at x - offset so features travel along +windDirection(), like rain and plants):
 //   coverage  where clouds exist; rises with CLOUD_COVERAGE, rain and thunder
 //   type      0 stratus, 0.35 stratocumulus, 0.6 cumulus, 1 cumulonimbus (rain favours stratus,
 //             thunder favours cumulonimbus)
@@ -38,7 +40,7 @@ struct CloudWeather {
 };
 
 CloudWeather cloudWeatherAt(vec2 xz) {
-    vec2 p = (xz + state.cloudOffset.xy) / WEATHER_TILE;
+    vec2 p = (xz - state.cloudOffset.xy) / WEATHER_TILE;
     vec4 n = texture(noise2dTex, p);
     vec4 n2 = texture(noise2dTex, p * 4.0 + 0.37);
     CloudWeather w;
@@ -76,9 +78,13 @@ float cloudDensity(vec3 worldPos, CloudWeather w, bool detail) {
     float profile = heightProfile(h01, w.type);
     if (profile <= 0.0) return 0.0;
 
-    // Wind shear: higher parts drift further downwind.
+    // Wind shear: higher parts lean downwind. The lean is a fixed slope along the current wind
+    // (0.3 .. 0.8 m per metre of height, stronger in storms). It used to be 0.35 * h01 times the
+    // wind displacement accumulated since loading, which grows without bound: after ~10 km of
+    // drift a 220 m step in height sampled the noise 350 m away, so clouds leaned further every
+    // minute until they sheared into flat streaks, and they jumped when the offset wrapped.
     vec3 p = worldPos;
-    p.xz += state.cloudOffset.xy * (1.0 + h01 * 0.35);
+    p.xz -= state.cloudOffset.xy + windDirection() * ((alt - CLOUD_BASE) * (0.3 + 0.5 * windStrength()));
     vec4 s = texture(cloudShapeTex, p / SHAPE_TILE * vec3(1.0, 1.6, 1.0));
     float fbm = s.g * 0.625 + s.b * 0.25 + s.a * 0.125;
     float shape = remapUnclamped(s.r, fbm - 1.0, 1.0, 0.0, 1.0);
