@@ -60,6 +60,18 @@ void main() {
         if (state.simCenter.w < 0.5 || abs(candidate - plane) > 0.6) plane = candidate;
     }
     state.simCenter = vec4(cameraPosition.x, plane, cameraPosition.z, (state.simCenter.w > 0.5 || inWater) ? 1.0 : 0.0);
+
+    // Previous body positions for this frame's disturbances, rolled here (one invocation, before
+    // the steps) and only on frames that step, so motion during frames without a step still
+    // counts. The step pass used to rewrite playerPrev / vehiclePrev from invocation (0,0) while
+    // every other invocation of the same dispatch was reading them: workgroups that ran after it
+    // saw no motion, leaving the wake missing in 4x4-block tiles.
+    if (steps > 0) {
+        state.playerPrev = state.playerLast;
+        state.vehiclePrev = state.vehicleLast;
+        state.playerLast = vec4(feet, (feetInWater || isEyeInWater == 1) ? 1.0 : 0.0);
+        state.vehicleLast = vec4(cameraPosition + relativeVehiclePosition, (isRiding && vehicleInWater) ? 1.0 : 0.0);
+    }
 }
 #endif
 
@@ -199,11 +211,5 @@ void main() {
     vec4 outv = vec4(next, prevOut, 0.0, 0.0);
     if (parity == 0) imageStore(waterSimB, t, outv);
     else imageStore(waterSimA, t, outv);
-
-    if (STEP == 0 && t == ivec2(0)) {
-        vec3 feet = eyePosition - vec3(0.0, inSwimmingAnimation ? 0.4 : 1.62, 0.0);
-        state.playerPrev = vec4(feet, (feetInWater || isEyeInWater == 1) ? 1.0 : 0.0);
-        state.vehiclePrev = vec4(cameraPosition + relativeVehiclePosition, (isRiding && vehicleInWater) ? 1.0 : 0.0);
-    }
 }
 #endif

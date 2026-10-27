@@ -85,7 +85,7 @@ void main() {
         #ifdef RAIN_RIPPLES
         float exposed = smoothstep(0.85, 0.97, lm.y);
         if (rainStrength * exposed > 0.01 && biomeWet > 0.0)
-            grad += rainRippleGradient(worldPos.xz, frameTimeCounter) * rainStrength * exposed * biomeWet;
+            grad += rainRippleGradient(vPlayerPos.xz, frameTimeCounter) * rainStrength * exposed * biomeWet;
         #endif
         if (abs(n.y) > 0.5) {
             // Height field over the horizontal plane; fade detail at grazing distance (anti-alias).

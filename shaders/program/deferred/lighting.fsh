@@ -139,7 +139,7 @@ void main() {
 
     float puddle = 0.0;
     #ifdef WORLD_OVERWORLD
-    puddle = applyWetness(m, n, gb.geoNormal, gb.lightmap, worldPos, gb.flags, 1.0);
+    puddle = applyWetness(m, n, gb.geoNormal, gb.lightmap, playerPos, worldPos, gb.flags, 1.0);
     #endif
 
     float ao = gb.ao;

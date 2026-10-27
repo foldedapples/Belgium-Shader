@@ -5,20 +5,37 @@
 // and random moments (one per cycle, independent phase per cell), each drop launching a damped
 // circular capillary wave. Neighbouring cells overlap so rings interfere; two grids at different
 // scales keep the pattern irregular. Returns the height gradient d(h)/d(xz).
+//
+// Precision: the pattern is evaluated in world xz wrapped to RIPPLE_PERIOD blocks, built from
+// Iris's integer camera position, so it is exact anywhere in the world. Evaluated at the float
+// world position (camera + offset), the error grows with distance from 0,0: up to 2e-3 block at
+// x = 30000 (0.8 % of a ring wavelength), 0.06 block at x = 1e6 (25 %), where the rings jitter as
+// the camera moves (tools/tests/test_ripple_precision.py). The period is a
+// whole number of cells of both layers and the cell hash wraps with it, so crossing a period
+// boundary changes nothing.
+const int RIPPLE_PERIOD = 1536;          // 3072 cells of 0.5, 4096 cells of 0.375
 
-vec2 rippleLayer(vec2 p, float t, float cellSize, float seed) {
+int wrapInt(int a, int n) { return a >= 0 ? a - (a / n) * n : n - 1 - (-a - 1 - ((-a - 1) / n) * n); }
+
+vec2 rippleCoord(vec2 playerXZ) {
+    ivec2 ci = ivec2(wrapInt(cameraPositionInt.x, RIPPLE_PERIOD), wrapInt(cameraPositionInt.z, RIPPLE_PERIOD));
+    return vec2(ci) + cameraPositionFract.xz + playerXZ;
+}
+
+vec2 rippleLayer(vec2 p, float t, float cellSize, float seed, int cellsPerPeriod) {
     vec2 g = p / cellSize;
     ivec2 c0 = ivec2(floor(g));
     vec2 grad = vec2(0.0);
     for (int j = -1; j <= 1; j++) {
         for (int i = -1; i <= 1; i++) {
             ivec2 c = c0 + ivec2(i, j);
-            vec3 h = hash3(c + ivec2(int(seed * 101.0), int(seed * 37.0)));
+            ivec2 cw = ivec2(wrapInt(c.x, cellsPerPeriod), wrapInt(c.y, cellsPerPeriod));
+            vec3 h = hash3(cw + ivec2(int(seed * 101.0), int(seed * 37.0)));
             float period = 0.9 + 0.8 * h.z;
             float tt = t / period + h.x;
             float cycle = floor(tt);
             float age = fract(tt) * period;                   // seconds since this drop landed
-            vec2 rnd = hash2(c * 7 + ivec2(int(cycle) & 1023, int(seed * 13.0)));
+            vec2 rnd = hash2(cw * 7 + ivec2(int(cycle) & 1023, int(seed * 13.0)));
             vec2 center = (vec2(c) + 0.15 + 0.7 * rnd) * cellSize;
             vec2 d = p - center;
             float r = length(d);
@@ -32,8 +49,10 @@ vec2 rippleLayer(vec2 p, float t, float cellSize, float seed) {
     return grad;
 }
 
-vec2 rainRippleGradient(vec2 xz, float t) {
-    vec2 g = rippleLayer(xz, t, 0.55, 0.0) + rippleLayer(xz + 3.7, t * 1.13, 0.37, 1.0) * 0.7;
+// `playerXZ`: player-space (camera-relative) position.
+vec2 rainRippleGradient(vec2 playerXZ, float t) {
+    vec2 xz = rippleCoord(playerXZ);
+    vec2 g = rippleLayer(xz, t, 0.5, 0.0, 3072) + rippleLayer(xz + 3.7, t * 1.13, 0.375, 1.0, 4096) * 0.7;
     return g * 0.0035;
 }
 

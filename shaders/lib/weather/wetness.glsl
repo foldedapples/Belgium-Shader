@@ -20,8 +20,9 @@ float puddleNoise(vec2 xz) {
     return n;
 }
 
-// Returns the puddle coverage (0..1) and modifies material and normal in place.
-float applyWetness(inout Material m, inout vec3 n, vec3 geoN, vec2 lm, vec3 worldPos, int flags, float height) {
+// Returns the puddle coverage (0..1) and modifies material and normal in place. `playerPos` is the
+// camera-relative position (ripples need its precision), `worldPos` = playerPos + cameraPosition.
+float applyWetness(inout Material m, inout vec3 n, vec3 geoN, vec2 lm, vec3 playerPos, vec3 worldPos, int flags, float height) {
     #ifdef WET_SURFACES
     float exposed = smoothstep(0.86, 0.96, lm.y);
     float wet = saturate(wetness * 1.2) * exposed * biomeWet;
@@ -49,7 +50,7 @@ float applyWetness(inout Material m, inout vec3 n, vec3 geoN, vec2 lm, vec3 worl
             if (!m.metal) m.f0 = mix(m.f0, vec3(0.02), puddle);
             vec3 flatN = geoN;
             #ifdef RAIN_RIPPLES
-            vec2 g = rainRippleGradient(worldPos.xz, frameTimeCounter) * rainStrength;
+            vec2 g = rainRippleGradient(playerPos.xz, frameTimeCounter) * rainStrength;
             flatN = normalize(vec3(-g.x, 1.0, -g.y));
             #endif
             n = normalize(mix(n, flatN, puddle));

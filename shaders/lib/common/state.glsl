@@ -21,6 +21,8 @@ layout(std430, binding = 0) buffer MeridianState {
     vec4  skySH[9];            // prepare: sky irradiance / pi as order-2 SH (rgb)
     vec4  misc;                // x: splash energy, y: previous swimming flag, zw cloud-shadow map centre (prepare)
     ivec4 shadowAnchor;        // begin: xyz world block the light rotation pivots about, w = valid
+    vec4  playerLast;          // prepare (water sim bookkeeping): feet at the last stepped frame, w in water
+    vec4  vehicleLast;         // prepare (water sim bookkeeping): vehicle at the last stepped frame, w valid
 } state;
 
 #endif

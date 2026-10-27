@@ -20,6 +20,15 @@ struct WaterParams {
 const float GRAVITY = 9.81;
 const int WAVE_TRAINS = 12;
 
+// Angular frequency of a train (deep-water dispersion, times WAVE_SPEED), rounded to a whole
+// number of cycles per hour. frameTimeCounter wraps to 0 every 3600 s; with arbitrary
+// frequencies every train jumped to an unrelated phase at that moment and the whole sea popped.
+// Rounding moves omega by at most pi/3600 = 8.7e-4 rad/s.
+float waveOmega(float k) {
+    const float CYCLE = TAU / 3600.0;
+    return max(round(sqrt(GRAVITY * k) * WAVE_SPEED / CYCLE), 1.0) * CYCLE;
+}
+
 // Deterministic per-train parameters: direction spread around the wind, wavelength ladder.
 void waveTrain(int i, WaterParams p, out vec2 dir, out float k, out float amp, out float phase0) {
     float fi = float(i);
@@ -46,13 +55,13 @@ void waveTrain(int i, WaterParams p, out vec2 dir, out float k, out float amp, o
 vec3 waveHeightGrad(vec2 xz, float t, WaterParams p) {
     float h = 0.0;
     vec2 g = vec2(0.0);
+    float t0 = t;
     t *= WAVE_SPEED;
     vec2 pos = xz - p.flow * t;
     for (int i = 0; i < WAVE_TRAINS; i++) {
         vec2 d; float k, a, ph;
         waveTrain(i, p, d, k, a, ph);
-        float w = sqrt(GRAVITY * k);
-        float x = k * dot(d, pos) - w * t + ph;
+        float x = k * dot(d, pos) - waveOmega(k) * t0 + ph;
         // Trochoid-like crest sharpening: sin plus a small second harmonic (keeps slopes bounded).
         float s = sin(x), c = cos(x);
         float sharp = 0.25 * min(k * a * 6.0, 1.0);
@@ -74,13 +83,13 @@ vec3 waveHeightGrad(vec2 xz, float t, WaterParams p) {
 // Low-frequency part only, for vertex displacement (cheap, no aliasing at one vertex per block).
 float waveSwellHeight(vec2 xz, float t, WaterParams p) {
     float h = 0.0;
+    float t0 = t;
     t *= WAVE_SPEED;
     vec2 pos = xz - p.flow * t;
     for (int i = 0; i < 4; i++) {
         vec2 d; float k, a, ph;
         waveTrain(i, p, d, k, a, ph);
-        float w = sqrt(GRAVITY * k);
-        h += a * sin(k * dot(d, pos) - w * t + ph);
+        h += a * sin(k * dot(d, pos) - waveOmega(k) * t0 + ph);
     }
     return h * WAVE_HEIGHT;
 }
