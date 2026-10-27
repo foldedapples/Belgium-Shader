@@ -47,6 +47,13 @@
   mapper supplies the contrast). The old curve stays available as Meridian Filmic (flat). Night
   exposure key 0.05 -> 0.065 so average night brightness is unchanged with the darker toe.
   Debug views 28-30: colour saturation, tone mapping only, bloom contribution.
+* Fix: End light flicker. Causes and fixes (docs/REGRESSION_AUDIT.md): the vanilla End flash was
+  added raw to every surface's ambient (shadowed End stone 4.8x brighter, in 20 Hz steps) - now
+  eased per frame and a faint glow (1.10x); Iris culled distant shadow casters with its own
+  light direction, so shadows popped while turning - distance culling only; End penumbrae were
+  4x the sun's and shimmered - 0.008 rad; the End shadow grid re-anchored every 32 blocks - now
+  fixed at the origin. Also: with Bloom off the exposure meter read unbuilt mip levels; parallax
+  self-shadowing in the End used Iris's sun.
 * Stars: subtle twinkling (atmospheric scintillation) per catalogue star, stronger towards the
   horizon (airmass^1.5), weaker for faint stars, log-normal so brightness is kept on average and
   no star drops out; the Milky Way and the End sky do not twinkle. Options: Star Twinkling,

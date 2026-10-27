@@ -14,6 +14,9 @@ python -P tools/tests/test_water_sim_frames.py                   # ripple-sim in
 python -P tools/tests/test_water_sim_events.py                   # ripple-sim sleeping, splashes, third person
 python -P tools/tests/test_water_propagation.py                  # ripple solver: speed, range, edge, stability (~3 min)
 python -P tools/tests/test_cloud_weather.py                      # cloud weather map: coverage, variety, tiling, wrap
+python -P tools/tests/test_cloud_density.py                      # cloud density: equalised shape, sky cover, separate clouds, storms
+python -P tools/tests/test_tonemap.py                            # tone mapper and grading: contrast, hue, chroma, emitters
+python -P tools/tests/test_end_lighting.py                       # End flash on terrain, shadow anchor
 python -P tools/tests/test_star_twinkle.py                       # star twinkling: mean, elevation, independence, frames
 python -P tools/tests/test_exposure_balance.py                   # End / Nether exposure and emission
 python -P tools/tests/test_rainbow.py                            # rainbow angles from water dispersion
@@ -88,6 +91,32 @@ the maths. These need the game:
   (F3 or an overlay) against the previous version at the same profile.
 * **Stars.** A clear night with time frozen: stars near the horizon twinkle more than those
   overhead; no star vanishes; the Milky Way glow is steady; TAA on and off; 30 and 144 FPS caps.
+
+### Clouds, colour and End light (2026-10-27, third batch)
+
+`tools/cloud_preview.py` renders the cloud model offline (fisheye, view, map) from the pack's own
+noise textures; the model tests cover the maths. These need the game:
+
+* **Clouds** (Coverage 0.45, clear weather, `/time set noon`): separate cumulus in groups with
+  open sky between; somewhere within a few km a clear region and somewhere a bank. No smooth grey
+  masses. Debug view 25 (weather map: r coverage, g type, b size), 26 (lighting: r direct,
+  g ambient, b opacity), 27 (temporal: red = no history, green = sample weight). Turn quickly and
+  fly: no smearing or ghost trails (27 red at the screen edges only). Different days
+  (`/time add 24000`) give different overall cover. `/weather thunder`: tall cells with anvils.
+  Compare GPU time with the previous commit at High and at Low.
+* **Colour**: grass rich but not neon, blue sky, white clouds with grey undersides, shadows
+  darker than before but with texture detail, nights no darker on average. Debug view 28
+  (saturation: magenta marks colours on the gamut edge; large magenta areas would be a problem),
+  29 (tone mapping without grading), 30 (bloom). Compare Tone Mapping = Meridian Filmic (flat),
+  the old look.
+* **End flicker**: the four fixed causes are in docs/REGRESSION_AUDIT.md. Stand still on the main
+  island with time frozen for a minute (End flashes come every ~30 s): with debug view 22
+  (ambient) the island may glow faintly purple during a flash but must not flash or step. Then
+  walk 100 blocks in a straight line and turn on the spot near the pillars: shadow edges must
+  not jump (debug view 8). If any flicker remains, isolate it one switch at a time and note which
+  one stops it: TAA off; Bloom off; Automatic Exposure off; Static Noise on; Coloured Light off;
+  AO and Indirect Sun off; Shadows at the lowest filter. Debug views 21 (direct, the disk light),
+  22 (ambient), 23 (emission), 8 (shadows) and 18 (exposure) show which term moves.
 
 ### Still to verify
 

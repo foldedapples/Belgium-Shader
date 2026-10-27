@@ -171,6 +171,42 @@ Old and new values for the first two items are reproduced in `tools/tests/test_e
   Static Noise diagnostic tells whether a flicker comes from them. The cause is not confirmed
   until that test has been run in game.
 
+## Clouds, colour, End flicker (2026-10-27, fourth report)
+
+* **Grey cloud masses over most of the sky.** The cloud shape value was 0.69 +- 0.14 (remapped
+  Perlin-Worley) and was thresholded against a coverage of 0.4-0.85 inside every cloud group, so
+  each group became one solid mass and the holes followed the group field. Coverage (cloud
+  fraction), sky cover, type, size, thickness and density are now separate; the shape noise is
+  equalised and cellular. Shadowed cloud sides received half the sky light (E / 4 pi instead of
+  E / 2 pi per hemisphere). Clouds were accumulated at low resolution from jittered samples and
+  stretched, which blurred them; the history is now full resolution. `test_cloud_density.py`.
+* **Dull, washed-out colour.** The default tone curve had a mid-tone contrast of 1.0 and lifted
+  shadows, and preserved channel ratios (no film-like mid-tone saturation); the profiles' split
+  toning was added in display space and lifted black to blue-grey. New default tone mapper;
+  split toning is a gain. `test_tonemap.py`.
+* **End light flicker.** Four mechanisms, in order of size:
+  1. *End flash in the terrain ambient.* `endAmbient()` added the raw `endFlashIntensity` x 0.4
+     to every surface: shadowed End stone 4.8x brighter during a flash (one every ~30 s), in
+     20 Hz steps because Iris updates that uniform per game tick, with exposure swinging after
+     it. Now eased per frame (`smooth()`) and 0.012 x: 1.10x at the peak, 0.11 % per frame.
+     The sky flare used `endFlashPosition`, which Iris does not provide.
+  2. *View-dependent shadow culling.* Iris culled shadow casters beyond 128 blocks with its own
+     light direction (in the End the fixed noon sun, not the black hole), so distant casters
+     appeared and disappeared as the camera turned. `shadow.culling = false` with
+     `shadowDistanceRenderMul = 1.0`: a fixed box of shadowDistance blocks.
+  3. *Penumbra noise.* The disk light's angular radius was 0.02 rad (4x the sun), so the
+     per-frame rotated blocker search flipped penumbra pixels between lit and shadowed. Now
+     0.008 rad.
+  4. *Shadow anchor re-snap.* The light-space texel grid was re-anchored near the player every
+     32 blocks, moving all shadow edges by up to 0.38 texel; the End's light is fixed, so the
+     grid now stays at the world origin there. `test_end_lighting.py`.
+
+  Also: with Bloom off, colortex0's mipmaps were never built and the exposure meter read
+  undefined levels (the bloom pass now always runs); parallax self-shadowing used Iris's shadow
+  light in the End. Not changed: the accretion disk's animation (sky only, does not light the
+  terrain), the light basis (stable at the End's fixed noon), exposure (constant reference band).
+  Not confirmed in game: no runtime was available; the in-game isolation steps are in TESTING.md.
+
 ## Reviewed, no fault found
 
 * End exposure and lighting: lit End stone lands near middle grey because exposure is clamped
