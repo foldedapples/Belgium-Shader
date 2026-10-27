@@ -19,6 +19,10 @@
   Options: Cloud Density, Weather-Based Clouds, Storm Clouds; Cloud Quality, Resolution and
   Cloud Shadows moved into the Volumetric Clouds screen. Cloud programs are disabled with clouds.
 * Fix: cirrus and cloud detail jumped when the wind offset wrapped / every hour.
+* Stars: subtle twinkling (atmospheric scintillation) per catalogue star, stronger towards the
+  horizon (airmass^1.5), weaker for faint stars, log-normal so brightness is kept on average and
+  no star drops out; the Milky Way and the End sky do not twinkle. Options: Star Twinkling,
+  Twinkle Intensity, Twinkle Speed.
 
 ## Unreleased (2026-10-26)
 

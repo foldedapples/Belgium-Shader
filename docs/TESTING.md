@@ -14,6 +14,7 @@ python -P tools/tests/test_water_sim_frames.py                   # ripple-sim in
 python -P tools/tests/test_water_sim_events.py                   # ripple-sim sleeping, splashes, third person
 python -P tools/tests/test_water_propagation.py                  # ripple solver: speed, range, edge, stability (~3 min)
 python -P tools/tests/test_cloud_weather.py                      # cloud weather map: coverage, variety, tiling, wrap
+python -P tools/tests/test_star_twinkle.py                       # star twinkling: mean, elevation, independence, frames
 python -P tools/tests/test_exposure_balance.py                   # End / Nether exposure and emission
 python -P tools/tests/test_rainbow.py                            # rainbow angles from water dispersion
 ```

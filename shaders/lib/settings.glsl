@@ -132,6 +132,9 @@ const float shadowDistance = 160.0; // [96.0 128.0 160.0 192.0 224.0 256.0]
 #define SUN_SIZE 1.5 // [1.0 1.5 2.0 2.5 3.0]
 #define STARS // Stars
 #define STAR_BRIGHTNESS 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0 3.0]
+#define STAR_TWINKLE // Star Twinkling
+#define STAR_TWINKLE_STRENGTH 1 // [0 1 2]
+#define STAR_TWINKLE_SPEED 1 // [0 1]
 #define MILKY_WAY // Milky Way
 #define MILKY_WAY_BRIGHTNESS 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0]
 #define ECLIPSES // Eclipses

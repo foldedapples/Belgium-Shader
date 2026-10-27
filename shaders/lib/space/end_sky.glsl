@@ -327,7 +327,7 @@ vec3 endBackground(vec3 d, float pixelAngle) {
     // exposure set by the disk-lit End islands (artistic; real space would look black here).
     const float k = 10.0;
     #ifdef STARS
-    c += starRadiance(eq, pixelAngle) * (k * STAR_BRIGHTNESS);
+    c += starRadiance(eq, pixelAngle, -1.0) * (k * STAR_BRIGHTNESS);   // no air: no twinkling
     #endif
     // The Milky Way band is the Overworld's night sky; the End shows other galaxies instead.
     c += heroGalaxy(d) + distantGalaxies(d, pixelAngle);

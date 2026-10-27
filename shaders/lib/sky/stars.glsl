@@ -28,15 +28,86 @@ vec2 starOctUv(vec3 d) {
     return p * 0.5 + 0.5;
 }
 
+// ---- twinkling (atmospheric scintillation)
+// Turbulent cells in the air (~10 cm, drifting with the wind) focus and defocus a star's light,
+// so its apparent brightness fluctuates. The scintillation index grows with the air path:
+// variance ~ airmass^3 (Young 1967), so stars near the horizon twinkle strongly and those overhead
+// barely. Planets and the Milky Way's diffuse glow are extended sources and average it out; only
+// the catalogue stars twinkle.
+//
+// Each star gets its own fluctuation from a hash of its catalogue index (it stays with the star
+// while the sky turns): three sinusoids at 0.6-2 Hz (half with STAR_TWINKLE_SPEED Slow) with
+// random phases, applied log-normally, exp(s n - s^2 / 2), so brightness never goes negative or
+// vanishes and its mean is kept. Real scintillation runs at tens of Hz, which at game frame rates
+// would read as noise and fight TAA; ~1 Hz reads as gentle twinkling and depends only on time,
+// not on the frame rate (tools/tests/test_star_twinkle.py: at Normal strength stars overhead vary
+// by ~4 % (0.91-1.10x), stars below ~20 degrees by up to 0.6-1.6x).
+// Frequencies are whole cycles per hour, so the frameTimeCounter wrap at 3600 s is seamless.
+#if STAR_TWINKLE_STRENGTH == 0
+const float TWINKLE_ZENITH = 0.02; const float TWINKLE_MAX = 0.12;
+#elif STAR_TWINKLE_STRENGTH == 1
+const float TWINKLE_ZENITH = 0.04; const float TWINKLE_MAX = 0.2;
+#else
+const float TWINKLE_ZENITH = 0.07; const float TWINKLE_MAX = 0.32;
+#endif
+#if STAR_TWINKLE_SPEED == 0
+const float TWINKLE_RATE = 0.5;
+#else
+const float TWINKLE_RATE = 1.0;
+#endif
+
+uint starHash(uint x) {
+    x ^= x >> 16; x *= 0x7feb352du;
+    x ^= x >> 15; x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+// Standard deviation of the log-brightness for a star seen at `cosZenith` (plane-parallel airmass,
+// capped near the horizon where extinction dims the star anyway).
+float twinkleSigma(float cosZenith) {
+    float airmass = 1.0 / max(cosZenith, 0.08);
+    // Rain and storms stir the air (and mostly hide the stars behind cloud anyway).
+    float turbulence = 1.0 + 0.3 * rainStrength + 0.3 * thunderStrength;
+    return min(TWINKLE_ZENITH * airmass * sqrt(airmass) * turbulence, TWINKLE_MAX);
+}
+
+// Brightness multiplier (rgb) of star `id` with log-brightness deviation `s`.
+vec3 starTwinkle(uint id, float s, float flux, float horizon, float t) {
+    // Faint stars at the edge of visibility twinkle visibly less (to the eye, and keeps the faint
+    // field from shimmering like noise): full effect from magnitude ~3.5, 35 % at 6.5.
+    s *= mix(0.35, 1.0, smoothstep(-7.68, -6.48, log2(max(flux, 1e-12)) * 0.30103));
+    const float CYCLE = 1.0 / 3600.0;
+    float n = 0.0, ph = 0.0;
+    uint h = starHash(id * 0x9e3779b9u + 0x632be5abu);
+    for (int k = 0; k < 3; k++) {
+        h = starHash(h);
+        float f = round((0.6 + 1.4 * float(h & 0xffffu) / 65535.0) * TWINKLE_RATE / CYCLE) * CYCLE;
+        ph = float(h >> 16) / 65535.0 * TAU;
+        n += sin(TAU * f * t + ph);
+    }
+    n *= 0.8165;                                   // sqrt(2/3): unit variance
+    float g = exp(s * n - 0.5 * s * s);
+    // Near the horizon the colours separate slightly (atmospheric dispersion): a small hue
+    // wobble with no change in luminance.
+    vec3 hue = vec3(sin(ph), sin(ph + 2.094), sin(ph + 4.189)) * (0.25 * s * horizon * sin(TAU * 0.7 * TWINKLE_RATE * t + ph));
+    return g * (1.0 + hue);
+}
+
 // Radiance of catalogue stars along equatorial direction `eq`; `pixelAngle` is the angular size
-// of one pixel in radians.
-vec3 starRadiance(vec3 eq, float pixelAngle) {
+// of one pixel in radians. `cosZenith` is the cosine of the view direction's zenith angle for
+// twinkling through the Overworld atmosphere; negative for none (space, the End).
+vec3 starRadiance(vec3 eq, float pixelAngle, float cosZenith) {
     ivec2 cell = clamp(ivec2(starOctUv(eq) * float(STAR_CELL_RES)), ivec2(0), ivec2(STAR_CELL_RES - 1));
     uvec2 range = texelFetch(starCells, cell, 0).xy;
     vec3 sum = vec3(0.0);
     float sigma = max(pixelAngle * 0.55, 1.2e-4);
     float inv2s2 = 0.5 / (sigma * sigma);
     float norm = 1.0 / (TAU * sigma * sigma);
+    #ifdef STAR_TWINKLE
+    float s = cosZenith >= 0.0 ? twinkleSigma(cosZenith) : 0.0;
+    float horizon = 1.0 - smoothstep(0.1, 0.5, cosZenith);
+    #endif
     for (uint i = 0u; i < 24u; i++) {
         if (i >= range.y) break;
         int idx = int(range.x + i) * 2;
@@ -45,7 +116,14 @@ vec3 starRadiance(vec3 eq, float pixelAngle) {
         vec4 b = texelFetch(starData, t0 + ivec2(1, 0), 0);
         vec3 dv = eq - a.xyz;
         float r2 = dot(dv, dv);
-        sum += b.rgb * (a.w * norm * exp(-r2 * inv2s2));
+        float w = a.w * norm * exp(-r2 * inv2s2);
+        vec3 c = b.rgb * w;
+        #ifdef STAR_TWINKLE
+        // Stars bordering two cells are stored in both, at different indices: the identity is
+        // hashed from the star's direction, which is the same in both copies.
+        if (s > 0.0 && w > 1e-9) c *= starTwinkle(floatBitsToUint(a.x) ^ (floatBitsToUint(a.z) * 0x27d4eb2du), s, a.w, horizon, frameTimeCounter);
+        #endif
+        sum += c;
     }
     return sum;
 }

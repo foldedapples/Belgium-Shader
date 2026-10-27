@@ -48,7 +48,10 @@ vec3 nightSkyRadiance(vec3 dir, float pixelAngle, float gain) {
     // visible stars then follows moonlight and exposure without any day/night switch.
     float k = SUN_ILLUMINANCE * MOON_PHYSICAL_RATIO * gain;
     #ifdef STARS
-    c += starRadiance(eq, pixelAngle) * (k * STAR_BRIGHTNESS);
+    // Twinkling follows the view elevation (lib/sky/stars.glsl). Moonlight, haze and twilight
+    // need no special case: the stars sit on top of the sky's own scattered light and the
+    // exposure, so their contrast drops with them, and clouds cover them in the lighting pass.
+    c += starRadiance(eq, pixelAngle, max(dir.y, 0.0)) * (k * STAR_BRIGHTNESS);
     #endif
     #ifdef MILKY_WAY
     c += milkyWayRadiance(eq) * (k * MILKY_WAY_BRIGHTNESS);
