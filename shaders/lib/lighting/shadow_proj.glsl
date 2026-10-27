@@ -18,6 +18,8 @@
 // anchor) instead of |dL| * (distance to 0,0,0).
 
 const float shadowIntervalSize = 0.0;
+// Shadow-pass culling distance = shadowDistance (with shadow.culling = false in shaders.properties).
+const float shadowDistanceRenderMul = 1.0;
 // Light rotation pivots about a world block within this many blocks of the camera (begin.csh).
 const int SHADOW_ANCHOR_RANGE = 32;
 const bool  shadowHardwareFiltering = true;

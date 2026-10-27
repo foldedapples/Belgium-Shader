@@ -2,6 +2,10 @@
 // 2..7, each filtered with a 9-tap tent) into a tile atlas in colortex9 (half resolution).
 // Inputs are softly limited in exposed units so the sun disk cannot flood the screen.
 // The final pass combines the tiles (lib/post/bloom.glsl).
+// The pass runs even with Bloom off (writing nothing useful): it is what makes Iris build
+// colortex0's mipmaps, which the exposure meter (composite5) reads at a level no finer than its
+// 32 x 18 grid. Disabling it with Bloom left those levels unbuilt, so the meter read undefined
+// data or single points and the exposure pulsed.
 
 #include "/lib/settings.glsl"
 #include "/lib/common/uniforms.glsl"
@@ -23,6 +27,10 @@ const bool colortex9Clear = true;
 layout(location = 0) out vec4 outBloom;
 
 void main() {
+    #ifndef BLOOM
+    outBloom = vec4(0.0);
+    return;
+    #endif
     int level;
     vec2 local;
     if (!bloomTileFromAtlas(texcoord, level, local)) { outBloom = vec4(0.0); return; }

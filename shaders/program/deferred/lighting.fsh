@@ -177,7 +177,10 @@ void main() {
     #else
     vec3 lightDir = END_LIGHT_DIR;
     vec3 lightIllum = endLightIlluminance();
-    float sunAng = 0.02;
+    // Penumbra size of the disk light. It was 0.02 rad (4x the sun): penumbrae filled the whole
+    // blocker search, whose per-frame rotated taps then alternately found a blocker or not, so
+    // the End's shadow edges shimmered, most visibly while moving (TAA keeps little history).
+    float sunAng = 0.008;
     #endif
     if (maxOf(lightIllum) > 1e-6) {
         float NoLgeo = dot(gb.geoNormal, lightDir);

@@ -50,8 +50,7 @@ uniform float rainStrength;
 uniform float wetness;
 uniform float thunderStrength;
 uniform vec4  lightningBoltPosition;
-uniform vec3  endFlashPosition;
-uniform float endFlashIntensity;
+uniform float endFlashSmooth;     // custom: endFlashIntensity eased per frame (shaders.properties)
 uniform int   biome_category;
 uniform int   biome_precipitation;
 uniform float temperature;

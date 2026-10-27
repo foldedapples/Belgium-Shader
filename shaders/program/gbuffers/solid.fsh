@@ -13,6 +13,9 @@
 #ifdef GBUF_BLOCK
 #include "/lib/material/end_portal.glsl"
 #endif
+#ifdef WORLD_END
+#include "/lib/lighting/shadow_proj.glsl"
+#endif
 
 uniform sampler2D gtexture;
 uniform sampler2D normals;
@@ -124,7 +127,11 @@ void main() {
     if (viewTS.z > 0.0 && vId != MAT_WATER) {
         float depthAtHit;
         uv = wrapTile(parallaxUv(vUv, viewTS, dx, dy, depthAtHit));
+        #ifdef WORLD_END
+        vec3 lightP = END_LIGHT_DIR;       // the black hole (Iris's shadow light is the fixed noon sun)
+        #else
         vec3 lightP = celestialDirection(shadowLightPosition);
+        #endif
         pomShadow = parallaxShadow(uv, depthAtHit, lightP * tbn, dx, dy);
     }
     #endif

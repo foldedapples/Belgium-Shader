@@ -37,10 +37,16 @@ vec3 endLightIlluminance() {
     return endDiskColor() * 3.2 * END_LIGHT_STRENGTH;
 }
 
+// The End flash (vanilla 1.21.9+, one every ~30 s) as light on the terrain: a faint purple sky
+// glow. This was the End's flicker. The raw endFlashIntensity was added to the ambient of every
+// surface at 4.4x the normal End ambient (shadowed End stone 0.046 -> 0.22, +2.3 stops), and
+// Iris updates that uniform once per game tick, so the whole island flashed in 20 Hz steps and
+// the exposure then swung after it. Now: endFlashSmooth (shaders.properties) eases the uniform
+// per frame (~0.4 s up, ~1.2 s down) and the terrain receives ~13 % of the ambient at full flash.
 vec3 endAmbient(vec3 n) {
     vec3 space = vec3(0.010, 0.010, 0.016);
     vec3 disk = endDiskColor() * 0.06 * saturate(dot(n, END_LIGHT_DIR) * 0.5 + 0.5) * END_LIGHT_STRENGTH;
-    vec3 flash = vec3(0.55, 0.35, 1.0) * endFlashIntensity * 0.4;
+    vec3 flash = vec3(0.55, 0.35, 1.0) * endFlashSmooth * 0.012 * saturate(n.y * 0.5 + 0.5);
     return (space + disk + flash) * PI * INV_PI;
 }
 
@@ -396,8 +402,11 @@ vec3 endSkyRadiance(vec3 d, float pixelAngle) {
     bg = endBackground(d, pixelAngle);
     #endif
     bg = mix(bg, planets.rgb, planets.a);
-    // End flash (1.21.9+): a brief purple flare from its direction.
-    bg += vec3(0.6, 0.35, 1.0) * endFlashIntensity * 0.3 * pow(saturate(dot(d, normalize(endFlashPosition + vec3(1e-4)))), 16.0);
+    // End flash (1.21.9+): the sky brightens with a broad purple glow, strongest overhead. Iris
+    // provides only the intensity (endFlashIntensity, previousEndFlashIntensity), not a position:
+    // the old flare used endFlashPosition, which Iris never sets (zero), so it always stood at the same
+    // fixed diagonal.
+    bg += vec3(0.6, 0.35, 1.0) * endFlashSmooth * 0.02 * (0.4 + 0.6 * saturate(d.y));
     return bg;
     #endif
 }

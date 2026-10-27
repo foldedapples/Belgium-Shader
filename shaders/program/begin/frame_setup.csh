@@ -42,10 +42,18 @@ void main() {
     // ~1e-3 block per frame; re-anchoring (a single sub-texel step) happens once per 32 blocks.
     ivec3 camBlockNow = cameraPositionInt + ivec3(floor(cameraPositionFract));
     ivec4 anchor = state.shadowAnchor;
+    #ifdef WORLD_END
+    // The End's light never moves, so nothing needs a nearby pivot: the grid stays anchored at the
+    // world origin. Re-anchoring every SHADOW_ANCHOR_RANGE blocks shifted the texel phase, so every
+    // shadow edge on the island jumped by up to a texel whenever the player crossed that distance.
+    anchor = ivec4(0, 0, 0, 1);
+    state.shadowAnchor = anchor;
+    #else
     if (anchor.w == 0 || any(greaterThan(abs(camBlockNow - anchor.xyz), ivec3(SHADOW_ANCHOR_RANGE)))) {
         anchor = ivec4(camBlockNow, 1);
         state.shadowAnchor = anchor;
     }
+    #endif
 
     // Camera position relative to the anchor in light space, in double precision.
     dmat3 Ld = dmat3(L);
