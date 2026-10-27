@@ -111,6 +111,8 @@ const float shadowDistance = 160.0; // [96.0 128.0 160.0 192.0 224.0 256.0]
 #define PUDDLE_SIZE 1.0 // [0.5 0.75 1.0 1.5 2.0]
 #define RAIN_RIPPLES // Rain Ripples
 #define LIGHTNING_FLASH // Lightning Flashes
+#define SNOW_OVERLAY // Snow cover on exposed surfaces in snowy biomes
+#define SNOW_AMOUNT 1.0 // [0.5 0.75 1.0 1.5 2.0]
 #define RAINBOWS // Rainbows
 #define RAINBOW_STRENGTH 1.0 // [0.5 0.75 1.0 1.5 2.0]
 

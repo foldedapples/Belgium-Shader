@@ -76,4 +76,33 @@ float applyWetness(inout Material m, inout vec3 n, vec3 geoN, vec2 lm, vec3 play
     #endif
 }
 
+// Snow cover in snowy biomes (material level, no extra geometry): settles on the tops of
+// sky-exposed surfaces, thinning out on slopes and along a world-space noise edge so cover is
+// patchy rather than a uniform white sheet, and grows while it snows (Iris wetness rises with any
+// precipitation). Covered parts become snow: bright, moderately rough, slightly translucent,
+// never metal. Entities, the hand and emitters stay clear. Returns the cover (0..1).
+float applySnow(inout Material m, inout vec3 n, vec3 geoN, vec2 lm, vec3 worldPos, int flags) {
+    #ifdef SNOW_OVERLAY
+    if (biomeSnowy <= 0.01 || hasFlag(flags, FLAG_ENTITY) || hasFlag(flags, FLAG_HAND) || m.emission > 0.01) return 0.0;
+    float exposed = smoothstep(0.8, 0.95, lm.y);
+    float up = saturate((geoN.y - 0.55) * 2.6);
+    if (exposed * up <= 0.0) return 0.0;
+    float amount = biomeSnowy * SNOW_AMOUNT * (0.6 + 0.4 * saturate(wetness * 1.5));
+    float field = valueNoise(worldPos.xz * 0.35) * 0.7 + valueNoise(worldPos.xz * 1.7 + 9.1) * 0.3;
+    float t = 1.0 - 0.55 * amount;
+    float cover = smoothstep(t - 0.08, t + 0.08, field * 0.4 + up * 0.6) * exposed;
+    if (cover <= 0.0) return 0.0;
+    m.albedo = mix(m.albedo, vec3(0.80, 0.83, 0.88), cover);
+    m.alpha = mix(m.alpha, 0.30, cover);
+    m.f0 = mix(m.f0, vec3(0.02), cover);
+    if (cover > 0.5) { m.metal = false; m.metalIndex = -2; }
+    m.sss = mix(m.sss, 0.45, cover);
+    m.porosity = mix(m.porosity, 0.0, cover);
+    n = normalize(mix(n, geoN, cover * 0.8));
+    return cover;
+    #else
+    return 0.0;
+    #endif
+}
+
 #endif
