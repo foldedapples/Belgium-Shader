@@ -48,7 +48,7 @@ coordinate problem) or only the shadow edges shimmer (filtering or TAA).
 
 ### Still to verify
 
-Nothing in this repository has been run in Minecraft since the 2026-10-26 fixes. Still to verify,
+Still to verify after the 2026-10-27 fixes,
 on Minecraft 1.21.11 + Fabric + Sodium + Iris:
 
 * Iris loads the pack with no errors in `logs/latest.log`.
