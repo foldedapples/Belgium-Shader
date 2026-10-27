@@ -52,6 +52,19 @@ To report shadow flicker usefully: `/gamerule doDaylightCycle false`, stand stil
 turn. Use debug view 9 (cascade texel checker) and note whether the checker itself moves (a
 coordinate problem) or only the shadow edges shimmer (filtering or TAA).
 
+### Water and flicker checks (2026-10-27)
+
+* **Debug view 24 (Water Simulation).** It shows the simulated height on the water and a status
+  strip: active, still moving, entry armed, splash pending, steps this frame, splash applied. Use
+  it for these checks:
+  * after leaving a boat, "still moving" must stay green while ripples spread;
+  * a jump in must light "splash applied" once.
+* **Flicker.** Stand by a torch and turn. Then switch on Static Noise (Advanced):
+  * if the flicker stops, it comes from stochastic sampling (try TAA on, and AO and Indirect Sun
+    off, to find which pass);
+  * if it doesn't stop, check debug view 18 (Exposure) for pulsing, and view 11 (Coloured Light
+    Volume).
+
 ### Still to verify
 
 Still to verify after the 2026-10-27 fixes,

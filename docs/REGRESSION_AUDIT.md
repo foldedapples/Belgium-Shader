@@ -146,6 +146,31 @@ Old and new values for the first two items are reproduced in `tools/tests/test_e
 * **Debug views 21–23.** Direct light, ambient plus block light, and emission, at the current
   exposure.
 
+## Boat wakes, water entry, flicker (2026-10-27, third report)
+
+* **Ripples froze after leaving the boat or the water.** My idle-sleep change (66b81d1) cleared
+  the "field still moving" flag on every frame, but only frames that step can set it again. Above
+  60 FPS most frames run no step, so the simulation fell asleep at once unless a body was in the
+  water, and a boat ride hides that. The flag is now cleared only on stepping frames.
+  `test_water_sim_events.py` models this: 60 steps/s after dismounting at 30, 60, 144 and
+  240 FPS, against 0 above 60 FPS before.
+* **No splash when jumping in.** The old splash (0.012 × entry speed) produced ring slopes of
+  0.02–0.13, no stronger than the ambient waves. Entry is now a state machine in the bookkeeping
+  pass:
+  * dry time is counted in real time;
+  * an entry is the body touching water after at least 0.15 s dry, moving down;
+  * the splash stays pending until a stepping frame applies it, so there is exactly one per entry;
+  * bobbing, shoreline edges, hopping above water and riding never trigger it.
+
+  Amplitude is 0.85 (1 − e^(−v/9)) blocks: 0.36 for a 5 blocks/s hop, at most 0.85.
+* **Flicker.** No intentional flicker exists in the lighting, and the coloured-light voxels are
+  complete every frame. The exposure meter sampled a mip finer than its 32 × 18 grid, so bright
+  things moving between sample points made the exposure pulse; it now reads a mip no finer than
+  the grid. The remaining time-varying inputs are per-frame noise rotations averaged by TAA
+  (soft shadows, contact shadows, half-resolution AO / bounce light, volumetric light). The
+  Static Noise diagnostic tells whether a flicker comes from them. The cause is not confirmed
+  until that test has been run in game.
+
 ## Reviewed, no fault found
 
 * End exposure and lighting: lit End stone lands near middle grey because exposure is clamped
