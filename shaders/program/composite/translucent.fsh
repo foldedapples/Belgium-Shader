@@ -45,6 +45,11 @@ uniform sampler2D colortex2;
 uniform sampler2D colortex4;
 uniform sampler2D colortex5;
 uniform sampler2D colortex6;
+#if DEBUG_VIEW == 24
+#include "/lib/water/sim_common.glsl"
+uniform sampler2D waterSimSamplerA;
+uniform sampler2D waterSimSamplerB;
+#endif
 
 in vec2 texcoord;
 
@@ -119,8 +124,8 @@ void main() {
     ivec2 px = ivec2(gl_FragCoord.xy);
     vec2 uv = texcoord;
     vec3 scene = texelFetch(colortex0, px, 0).rgb;
-    float noise = interleavedGradient(gl_FragCoord.xy + float(frameCounter % 64) * 5.588238);
-    vec2 noise2 = r2(float(frameCounter % 256) + noise * 64.0);
+    float noise = interleavedGradient(gl_FragCoord.xy + float(NOISE_FRAME % 64) * 5.588238);
+    vec2 noise2 = r2(float(NOISE_FRAME % 256) + noise * 64.0);
 
     vec4 surf = texelFetch(colortex4, px, 0);
     uvec2 idf = unpack2x8u(surf.w);
@@ -131,6 +136,34 @@ void main() {
     float d0 = texelFetch(depthtex0, px, 0).r;
     float d1 = texelFetch(depthtex1, px, 0).r;
     bool translucent = tId != 0 && !sd0.sky && (sd1.sky || sd0.viewPos.z > sd1.viewPos.z + 1e-3);
+
+    #if DEBUG_VIEW == 24
+    // Water simulation: simulated height on water (red up, blue down) over a dimmed scene, and a
+    // status strip in the top-left corner, one cell each: simulation active | field still moving |
+    // entry armed (dry >= 0.15 s) | splash pending | steps this frame (0-4) | splash applied now.
+    {
+        vec3 dbg = linearToSrgb(saturate(scene * state.exposure)) * 0.35;
+        if (tId == MAT_WATER && !sd0.sky) {
+            vec3 pp = viewToPlayer(sd0.viewPos);
+            ivec2 cell = simCameraCell() + ivec2(floor(simLocal(pp.xz)));
+            ivec2 tx = simTexel(cell);
+            float h = state.simParity == 0 ? texelFetch(waterSimSamplerA, tx, 0).r : texelFetch(waterSimSamplerB, tx, 0).r;
+            dbg = mix(dbg, h > 0.0 ? vec3(1.0, 0.25, 0.1) : vec3(0.1, 0.35, 1.0), saturate(abs(h) * 6.0));
+            dbg *= mix(0.4, 1.0, simEdgeFade(simLocal(pp.xz)));
+        }
+        vec2 sp = gl_FragCoord.xy / vec2(viewWidth, viewHeight);
+        if (sp.y > 0.95 && sp.x < 0.3) {
+            int k = int(sp.x / 0.05);
+            bool on = k == 0 ? state.simCenter.w > 0.5 : k == 1 ? state.simFlags.x != 0 : k == 2 ? state.simFlags.z >= 150
+                    : k == 3 ? state.simFlags.w > 0 : k == 4 ? state.simInfo.y > 0 : state.simInfo.z > 0;
+            float steps = float(state.simInfo.y) / 4.0;
+            dbg = k == 4 ? vec3(steps, steps, 0.2) : (on ? vec3(0.2, 1.0, 0.3) : vec3(0.35, 0.05, 0.05));
+            if (fract(sp.x / 0.05) < 0.06) dbg = vec3(0.0);
+        }
+        outColor = vec4(srgbToLinear(dbg), 1.0);
+        return;
+    }
+    #endif
 
     // ---------------------------------------------------------------- opaque reflections
     if (!translucent) {

@@ -77,7 +77,7 @@ void main() {
     vec3 dirView = normalize(viewPos);
     vec3 dir = mat3(gbufferModelViewInverse) * dirView;
     float dist = depth < 1.0 ? length(viewPos) : far * 1.5;
-    float noise = interleavedGradient(vec2(px) + float(frameCounter % 64) * 5.588238);
+    float noise = interleavedGradient(vec2(px) + float(NOISE_FRAME % 64) * 5.588238);
     mat3 Ls = shadowLightRotation();
     vec3 lightDir = shadowLightDirPlayer();
 

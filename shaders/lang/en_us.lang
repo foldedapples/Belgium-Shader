@@ -266,6 +266,8 @@ option.TAA=Temporal Anti-Aliasing
 option.TAA.comment=Smooths edges and the noise of soft shadows, reflections and clouds over several frames.
 option.TAA_SHARPNESS=Sharpening
 
+option.STATIC_NOISE=Static Noise (diagnostic)
+option.STATIC_NOISE.comment=Freezes all per-frame sampling noise. If a light or shadow flicker stops with this on, it comes from stochastic sampling; otherwise it has another cause. Leave off for normal play.
 option.DEBUG_VIEW=Debug View
 option.DEBUG_VIEW.comment=Shows internal data instead of the image, for testing and bug reports.
 value.DEBUG_VIEW.0=Off
@@ -292,3 +294,4 @@ value.DEBUG_VIEW.20=LOD Depth
 value.DEBUG_VIEW.21=HDR: Direct Light
 value.DEBUG_VIEW.22=HDR: Ambient + Block Light
 value.DEBUG_VIEW.23=HDR: Emission
+value.DEBUG_VIEW.24=Water Simulation

@@ -119,7 +119,7 @@ void main() {
     vec4 g2 = texture(colortex2, uv);
     vec3 n = octDecode(unpack2x8(g2.z));
     vec3 viewN = mat3(gbufferModelView) * n;
-    float noise = interleavedGradient(vec2(px) + float(frameCounter % 64) * 5.588238);
+    float noise = interleavedGradient(vec2(px) + float(NOISE_FRAME % 64) * 5.588238);
     float ao = 1.0;
     #ifdef AMBIENT_OCCLUSION
     ao = horizonAO(uv, viewPos, viewN, noise);

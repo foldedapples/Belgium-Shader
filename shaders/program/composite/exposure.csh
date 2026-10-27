@@ -26,7 +26,10 @@ shared float sW[576];
 void main() {
     uint tid = gl_LocalInvocationIndex;
     vec2 uv = (vec2(gl_LocalInvocationID.xy) + 0.5) / vec2(32.0, 18.0);
-    float lod = max(log2(max(viewWidth, viewHeight) / 64.0), 0.0);
+    // A mip no finer than the 32 x 18 sample grid, so every sample averages its whole cell. With a
+    // finer mip the samples covered only part of the screen and small bright things (a torch, a
+    // lantern) moving between sample points as the view turned made the exposure pulse.
+    float lod = max(ceil(log2(max(viewWidth / 32.0, viewHeight / 18.0))), 0.0);
     vec3 c = textureLod(colortex0, uv, lod).rgb;
     float l = luminance(c);
     if (isnan(l) || isinf(l)) l = 0.0;

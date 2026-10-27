@@ -88,7 +88,7 @@ void main() {
     if (any(greaterThanEqual(px, size))) return;
 
     // Sub-pixel position inside the low-res pixel cycles every frame (temporal super-sampling).
-    vec2 sub = r2(float(frameCounter % 64));
+    vec2 sub = r2(float(NOISE_FRAME % 64));
     vec2 uv = (vec2(px) + sub) / vec2(size);
     float depth = texture(depthtex1, uv).r;
     vec3 viewPos = screenToView(uv, 1.0, gbufferProjectionInverse);
@@ -136,7 +136,7 @@ void main() {
     float span = tEnd - tStart;
     float coarse = clamp(span / float(PRIMARY_STEPS), 60.0, 600.0);
     float fine = coarse * 0.25;
-    float jitter = interleavedGradient(vec2(px) + float(frameCounter % 32) * 7.17);
+    float jitter = interleavedGradient(vec2(px) + float(NOISE_FRAME % 32) * 7.17);
     float t = tStart + coarse * jitter;
     vec3 T = vec3(1.0);
     vec3 scatter = vec3(0.0);

@@ -137,7 +137,7 @@ void main() {
         return;
     }
 
-    float ign = interleavedGradient(gl_FragCoord.xy + float(frameCounter % 64) * 5.588238);
+    float ign = interleavedGradient(gl_FragCoord.xy + float(NOISE_FRAME % 64) * 5.588238);
     vec3 worldPos = playerPos + cameraPosition;
     Material m = decodeMaterial(gb.albedo, gb.spec, 1.0);
     vec3 n = gb.normal;

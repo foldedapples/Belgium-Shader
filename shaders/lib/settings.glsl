@@ -156,7 +156,16 @@ const float shadowDistance = 160.0; // [96.0 128.0 160.0 192.0 224.0 256.0]
 #define TAA_SHARPNESS 0.4 // [0.0 0.2 0.4 0.6 0.8]
 
 /*---------------------------------------------------------------- Debug */
-#define DEBUG_VIEW 0 // [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23]
+// Diagnostic: freeze every per-frame noise rotation (soft shadows, contact shadows, AO / bounce
+// light, volumetric light, reflections, clouds). If a flicker stops with this on, it comes from
+// stochastic sampling that TAA does not fully average; if not, look elsewhere.
+//#define STATIC_NOISE
+#ifdef STATIC_NOISE
+#define NOISE_FRAME 0
+#else
+#define NOISE_FRAME frameCounter
+#endif
+#define DEBUG_VIEW 0 // [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24]
 
 /*---------------------------------------------------------------- Derived switches */
 // Iris's option scanner lists a toggle only when some #ifdef/#ifndef tests it directly, so
