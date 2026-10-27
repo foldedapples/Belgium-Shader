@@ -148,6 +148,7 @@ const float shadowDistance = 160.0; // [96.0 128.0 160.0 192.0 224.0 256.0]
 #define NETHER_ASH // Ash
 
 /*---------------------------------------------------------------- Distant terrain */
+#define DH_CHUNK_FADE // Distant Horizons: dithered hand-over from vanilla chunks to LOD terrain
 #define LOD_FADE 1.0 // [0.5 0.75 1.0 1.5 2.0]
 
 /*---------------------------------------------------------------- Performance */

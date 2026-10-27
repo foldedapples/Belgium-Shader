@@ -61,6 +61,18 @@ vec2 simGradient(vec2 playerXZ) {
 #endif
 
 void main() {
+    #ifndef GBUF_HAND_WATER
+    #if defined DISTANT_HORIZONS && defined DH_CHUNK_FADE
+    // Hand-over to Distant Horizons: over 0.82..0.98 of the render distance vanilla fragments are
+    // discarded with rising probability (temporal dither, resolved by TAA), revealing the DH terrain
+    // drawn underneath from 0.8 x far (dh_terrain / dh_water), so there is no hard line, hole or
+    // doubled geometry. Shadows are unaffected (the shadow pass keeps all vanilla geometry).
+    {
+        float fade = smoothstep(far * 0.82, far * 0.98, length(vPlayerPos.xz));
+        if (fade > 0.0 && interleavedGradient(gl_FragCoord.xy + float(frameCounter % 64) * 5.588238) < fade) discard;
+    }
+    #endif
+    #endif
     vec4 albedo = texture(gtexture, vUv) * vColor;
     vec3 n = normalize(vNormal);
     if (!gl_FrontFacing) n = -n;

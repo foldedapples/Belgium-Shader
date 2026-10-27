@@ -7,8 +7,10 @@
 #include "/lib/material/ids.glsl"
 #include "/lib/material/labpbr.glsl"
 #include "/lib/material/fallback.glsl"
-#ifdef GBUF_BLOCK
+#if defined GBUF_BLOCK || (defined DISTANT_HORIZONS && defined GBUF_TERRAIN)
 #include "/lib/common/noise.glsl"
+#endif
+#ifdef GBUF_BLOCK
 #include "/lib/material/end_portal.glsl"
 #endif
 
@@ -91,6 +93,18 @@ void main() {
     vec2 dx = dFdx(vUv), dy = dFdy(vUv);
     vec3 n = normalize(vNormal);
     if (!gl_FrontFacing) n = -n;
+    #ifdef GBUF_TERRAIN
+    #if defined DISTANT_HORIZONS && defined DH_CHUNK_FADE
+    // Hand-over to Distant Horizons: over 0.82..0.98 of the render distance vanilla fragments are
+    // discarded with rising probability (temporal dither, resolved by TAA), revealing the DH terrain
+    // drawn underneath from 0.8 x far (dh_terrain / dh_water), so there is no hard line, hole or
+    // doubled geometry. Shadows are unaffected (the shadow pass keeps all vanilla geometry).
+    {
+        float fade = smoothstep(far * 0.82, far * 0.98, length(vPlayerPos.xz));
+        if (fade > 0.0 && interleavedGradient(gl_FragCoord.xy + float(frameCounter % 64) * 5.588238) < fade) discard;
+    }
+    #endif
+    #endif
 
     #ifdef GBUF_BLOCK
     if (vId == MAT_END_PORTAL || vId == MAT_END_GATEWAY) {

@@ -257,6 +257,8 @@ option.CUSTOM_WHITE_BALANCE=Custom: White Balance
 suffix.CUSTOM_WHITE_BALANCE= K
 option.CUSTOM_SHADOW_TINT=Custom: Split Toning
 
+option.DH_CHUNK_FADE=DH Chunk Fade
+option.DH_CHUNK_FADE.comment=With Distant Horizons: vanilla chunks dissolve into the LOD terrain over the last part of the render distance instead of ending at a hard line.
 option.LOD_FADE=Distant Terrain Edge Fade
 option.LOD_FADE.comment=How strongly the very edge of Distant Horizons or Voxy terrain fades into the sky.
 
